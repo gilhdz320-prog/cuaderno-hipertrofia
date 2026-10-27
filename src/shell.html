@@ -7,6 +7,13 @@
   <meta name="description" content="Cuaderno de entrenamiento de hipertrofia para 4 días por semana, ajustable a 2, 3, 5 o 6, con volumen, tonelaje y progresión automáticos.">
   <meta name="theme-color" content="#f3efe6">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231b1713'/%3E%3Cpath d='M18 44V20h6v9h16v-9h6v24h-6v-9H24v9z' fill='%23f3efe6'/%3E%3C/svg%3E">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Cuaderno">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+  <meta name="theme-color" content="#f3efe6" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#14110e" media="(prefers-color-scheme: dark)">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -20,6 +27,7 @@
       <div class="chips">
         <span class="chip" id="weekChip">semana 1</span>
         <span class="chip" id="freqChip">4 días</span>
+        <button class="btn sm hidden" id="installBtn" title="Instalar en la pantalla de inicio">Instalar</button>
         <span class="save" id="saveState"><i class="dot"></i>guardado</span>
         <button class="btn icon ghost" id="themeBtn" title="Cambiar tema" aria-label="Cambiar entre tema claro y oscuro">◐</button>
       </div>

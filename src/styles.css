@@ -478,3 +478,22 @@ label.btn { cursor: pointer; }
 }
 
 .print-only { display: none; }
+
+
+/* botón de instalar en la cabecera */
+#installBtn { white-space: nowrap; }
+@media (max-width: 560px) {
+  #installBtn { font-size: .72rem; padding: 4px 8px; min-height: 28px; }
+}
+
+/* toast con acción (recargar / nueva versión) */
+.toast { display: flex; align-items: center; gap: 10px; }
+.toast .btn {
+  background: rgba(255, 255, 255, .16);
+  border-color: rgba(255, 255, 255, .35);
+  color: inherit;
+  font-size: .76rem;
+  padding: 3px 9px;
+  min-height: 26px;
+}
+.toast .btn:hover { background: rgba(255, 255, 255, .26); border-color: rgba(255, 255, 255, .5); }

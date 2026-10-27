@@ -59,13 +59,20 @@
   function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); return n; }
 
   let toastT = null;
-  function toast(msg) {
+  function toast(msg, action) {
     const t = $('#toast');
     if (!t) return;
-    t.textContent = msg;
+    clear(t);
+    t.appendChild(document.createTextNode(msg));
+    if (action) {
+      t.appendChild(el('button', {
+        class: 'btn sm', text: action.label,
+        onclick: () => { action.onClick(); t.classList.remove('show'); }
+      }));
+    }
     t.classList.add('show');
     clearTimeout(toastT);
-    toastT = setTimeout(() => t.classList.remove('show'), 2400);
+    toastT = setTimeout(() => t.classList.remove('show'), action ? 9000 : 2400);
   }
 
   function debounce(fn, ms) {
@@ -284,6 +291,9 @@
       wrap.appendChild(restCard(date, L));
       return wrap;
     }
+
+    const iosHint = iosInstallHint();
+    if (iosHint) wrap.appendChild(iosHint);
 
     /* aviso de descarga */
     const ph = phaseNow();
@@ -1533,6 +1543,65 @@
   }
 
   /* ------------------------------------------------------------------ *
+   * PWA: instalar, offline y actualizaciones
+   * ------------------------------------------------------------------ */
+  let DEFERRED_PROMPT = null;
+
+  function isStandalone() {
+    return window.navigator.standalone === true ||
+      (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  }
+
+  function iosInstallHint() {
+    const ua = navigator.userAgent || '';
+    const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (!isIOS || isStandalone()) return null;
+    try { if (localStorage.getItem('cuaderno.iosInstall') === '1') return null; } catch (e) {}
+    return el('div', { class: 'banner' },
+      el('div', {}, el('b', { text: 'Úsalo como app: ' }), 'Compartir → Añadir a pantalla de inicio. Se abre a pantalla completa y funciona sin cobertura.'),
+      el('button', {
+        class: 'btn sm ghost', text: 'entendido',
+        onclick: () => { try { localStorage.setItem('cuaderno.iosInstall', '1'); } catch (e) {} render(); }
+      })
+    );
+  }
+
+  function setupPWA() {
+    const btn = $('#installBtn');
+    window.addEventListener('beforeinstallprompt', (ev) => {
+      ev.preventDefault();
+      DEFERRED_PROMPT = ev;
+      if (btn) btn.classList.remove('hidden');
+    });
+    window.addEventListener('appinstalled', () => {
+      if (btn) btn.classList.add('hidden');
+      toast('Añadida a la pantalla de inicio');
+    });
+    if (btn) btn.addEventListener('click', function () {
+      if (!DEFERRED_PROMPT) { toast('Usa el menú del navegador: «Instalar aplicación»'); return; }
+      DEFERRED_PROMPT.prompt();
+      DEFERRED_PROMPT.userChoice.then((choice) => {
+        if (choice && choice.outcome === 'accepted') toast('Instalando…');
+        DEFERRED_PROMPT = null;
+        btn.classList.add('hidden');
+      });
+    });
+
+    if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
+    navigator.serviceWorker.register('sw.js').then((reg) => {
+      reg.addEventListener('updatefound', () => {
+        const sw = reg.installing;
+        if (!sw) return;
+        sw.addEventListener('statechange', () => {
+          if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+            toast('Hay una versión nueva', { label: 'recargar', onClick: () => location.reload() });
+          }
+        });
+      });
+    }).catch(() => { /* sin service worker: la app sigue funcionando online */ });
+  }
+
+  /* ------------------------------------------------------------------ *
    * arranque
    * ------------------------------------------------------------------ */
   function init() {
@@ -1570,6 +1639,8 @@
     /* enlace directo a una pestaña: #semana, #programa… */
     const hash = (location.hash || '').replace('#', '');
     if (['hoy', 'semana', 'programa', 'progreso', 'bloque'].indexOf(hash) >= 0) TAB = hash;
+
+    setupPWA();
 
     if (!stored) { save(true); }
     if (new URLSearchParams(location.search).get('selftest') === '1') return runSelfTest();

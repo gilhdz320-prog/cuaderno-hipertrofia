@@ -7,6 +7,13 @@
   <meta name="description" content="Cuaderno de entrenamiento de hipertrofia para 4 días por semana, ajustable a 2, 3, 5 o 6, con volumen, tonelaje y progresión automáticos.">
   <meta name="theme-color" content="#f3efe6">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231b1713'/%3E%3Cpath d='M18 44V20h6v9h16v-9h6v24h-6v-9H24v9z' fill='%23f3efe6'/%3E%3C/svg%3E">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Cuaderno">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+  <meta name="theme-color" content="#f3efe6" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#14110e" media="(prefers-color-scheme: dark)">
   <style>
 /* ============================================================================
    cuaderno · styles.css
@@ -489,6 +496,25 @@ label.btn { cursor: pointer; }
 
 .print-only { display: none; }
 
+
+/* botón de instalar en la cabecera */
+#installBtn { white-space: nowrap; }
+@media (max-width: 560px) {
+  #installBtn { font-size: .72rem; padding: 4px 8px; min-height: 28px; }
+}
+
+/* toast con acción (recargar / nueva versión) */
+.toast { display: flex; align-items: center; gap: 10px; }
+.toast .btn {
+  background: rgba(255, 255, 255, .16);
+  border-color: rgba(255, 255, 255, .35);
+  color: inherit;
+  font-size: .76rem;
+  padding: 3px 9px;
+  min-height: 26px;
+}
+.toast .btn:hover { background: rgba(255, 255, 255, .26); border-color: rgba(255, 255, 255, .5); }
+
 </style>
 </head>
 <body>
@@ -502,6 +528,7 @@ label.btn { cursor: pointer; }
       <div class="chips">
         <span class="chip" id="weekChip">semana 1</span>
         <span class="chip" id="freqChip">4 días</span>
+        <button class="btn sm hidden" id="installBtn" title="Instalar en la pantalla de inicio">Instalar</button>
         <span class="save" id="saveState"><i class="dot"></i>guardado</span>
         <button class="btn icon ghost" id="themeBtn" title="Cambiar tema" aria-label="Cambiar entre tema claro y oscuro">◐</button>
       </div>
@@ -1571,13 +1598,20 @@ label.btn { cursor: pointer; }
   function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); return n; }
 
   let toastT = null;
-  function toast(msg) {
+  function toast(msg, action) {
     const t = $('#toast');
     if (!t) return;
-    t.textContent = msg;
+    clear(t);
+    t.appendChild(document.createTextNode(msg));
+    if (action) {
+      t.appendChild(el('button', {
+        class: 'btn sm', text: action.label,
+        onclick: () => { action.onClick(); t.classList.remove('show'); }
+      }));
+    }
     t.classList.add('show');
     clearTimeout(toastT);
-    toastT = setTimeout(() => t.classList.remove('show'), 2400);
+    toastT = setTimeout(() => t.classList.remove('show'), action ? 9000 : 2400);
   }
 
   function debounce(fn, ms) {
@@ -1796,6 +1830,9 @@ label.btn { cursor: pointer; }
       wrap.appendChild(restCard(date, L));
       return wrap;
     }
+
+    const iosHint = iosInstallHint();
+    if (iosHint) wrap.appendChild(iosHint);
 
     /* aviso de descarga */
     const ph = phaseNow();
@@ -3045,6 +3082,65 @@ label.btn { cursor: pointer; }
   }
 
   /* ------------------------------------------------------------------ *
+   * PWA: instalar, offline y actualizaciones
+   * ------------------------------------------------------------------ */
+  let DEFERRED_PROMPT = null;
+
+  function isStandalone() {
+    return window.navigator.standalone === true ||
+      (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  }
+
+  function iosInstallHint() {
+    const ua = navigator.userAgent || '';
+    const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (!isIOS || isStandalone()) return null;
+    try { if (localStorage.getItem('cuaderno.iosInstall') === '1') return null; } catch (e) {}
+    return el('div', { class: 'banner' },
+      el('div', {}, el('b', { text: 'Úsalo como app: ' }), 'Compartir → Añadir a pantalla de inicio. Se abre a pantalla completa y funciona sin cobertura.'),
+      el('button', {
+        class: 'btn sm ghost', text: 'entendido',
+        onclick: () => { try { localStorage.setItem('cuaderno.iosInstall', '1'); } catch (e) {} render(); }
+      })
+    );
+  }
+
+  function setupPWA() {
+    const btn = $('#installBtn');
+    window.addEventListener('beforeinstallprompt', (ev) => {
+      ev.preventDefault();
+      DEFERRED_PROMPT = ev;
+      if (btn) btn.classList.remove('hidden');
+    });
+    window.addEventListener('appinstalled', () => {
+      if (btn) btn.classList.add('hidden');
+      toast('Añadida a la pantalla de inicio');
+    });
+    if (btn) btn.addEventListener('click', function () {
+      if (!DEFERRED_PROMPT) { toast('Usa el menú del navegador: «Instalar aplicación»'); return; }
+      DEFERRED_PROMPT.prompt();
+      DEFERRED_PROMPT.userChoice.then((choice) => {
+        if (choice && choice.outcome === 'accepted') toast('Instalando…');
+        DEFERRED_PROMPT = null;
+        btn.classList.add('hidden');
+      });
+    });
+
+    if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
+    navigator.serviceWorker.register('sw.js').then((reg) => {
+      reg.addEventListener('updatefound', () => {
+        const sw = reg.installing;
+        if (!sw) return;
+        sw.addEventListener('statechange', () => {
+          if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+            toast('Hay una versión nueva', { label: 'recargar', onClick: () => location.reload() });
+          }
+        });
+      });
+    }).catch(() => { /* sin service worker: la app sigue funcionando online */ });
+  }
+
+  /* ------------------------------------------------------------------ *
    * arranque
    * ------------------------------------------------------------------ */
   function init() {
@@ -3082,6 +3178,8 @@ label.btn { cursor: pointer; }
     /* enlace directo a una pestaña: #semana, #programa… */
     const hash = (location.hash || '').replace('#', '');
     if (['hoy', 'semana', 'programa', 'progreso', 'bloque'].indexOf(hash) >= 0) TAB = hash;
+
+    setupPWA();
 
     if (!stored) { save(true); }
     if (new URLSearchParams(location.search).get('selftest') === '1') return runSelfTest();

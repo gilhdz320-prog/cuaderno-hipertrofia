@@ -1,0 +1,26 @@
+{
+  "name": "Cuaderno · Hipertrofia en déficit",
+  "short_name": "Cuaderno",
+  "description": "Registro de entrenamiento de hipertrofia en déficit: series, tonelaje y progresión, con reajuste de 2 a 6 días.",
+  "lang": "es",
+  "dir": "ltr",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#f3efe6",
+  "theme_color": "#1b1713",
+  "categories": ["health", "fitness", "sports", "productivity"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Sesión de hoy", "short_name": "Hoy", "url": "./#hoy" },
+    { "name": "Semana", "short_name": "Semana", "url": "./#semana" },
+    { "name": "El bloque", "short_name": "Bloque", "url": "./#bloque" }
+  ]
+}

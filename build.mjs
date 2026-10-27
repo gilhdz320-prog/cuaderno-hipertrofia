@@ -1,5 +1,6 @@
 /* Empaqueta src/ en un único HTML autocontenido. */
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 
 const dir = new URL('./src/', import.meta.url);
 const read = (f) => fs.readFileSync(new URL(f, dir), 'utf8');
@@ -24,6 +25,16 @@ html = put(html, '<script src="engine.js"></script>', '<script>\n' + engine + '\
 html = put(html, '<script src="app.js"></script>', '<script>\n' + app + '\n</script>');
 
 if (html.includes('src="app.js"') || html.includes('href="styles.css"')) throw new Error('quedan referencias externas');
+
+/* El service worker lleva la versión de la caché: cada build la invalida. */
+const hash = crypto.createHash('sha1').update(html).digest('hex').slice(0, 10);
+const swSrc = read('sw.js');
+if (swSrc.indexOf('__CACHE__') < 0) throw new Error('sw.js sin marcador __CACHE__');
+fs.writeFileSync(new URL('../sw.js', dir), swSrc.replace('__CACHE__', 'cuaderno-' + hash));
+
+for (const asset of ['../manifest.webmanifest', '../icons/icon-192.png', '../icons/icon-512.png', '../icons/icon-maskable-512.png', '../icons/apple-touch-icon.png']) {
+  if (!fs.existsSync(new URL(asset, dir))) throw new Error('falta el asset ' + asset);
+}
 
 const out = new URL('../index.html', dir);
 fs.writeFileSync(out, html);
