@@ -91,6 +91,22 @@ En déficit, pasar de 8 a 10 repeticiones con el mismo peso es progresar. El ré
 
 La app calcula la semana desde la fecha de inicio del bloque y aplica la descarga sola.
 
+## Desplegar en Netlify
+
+El repositorio ya trae `netlify.toml`: es un sitio estático sin build (`publish = "."`).
+
+**Pasos (una vez), para que `powerbuilgin.netlify.app` sirva esta versión y se actualice sola con cada push:**
+
+1. Netlify → tu sitio → *Site configuration* → *Build & deploy* → *Continuous deployment* → **Link repository**.
+2. Elige GitHub → `cuaderno-hipertrofia` → rama `main`.
+3. Build command: **vacío**. Publish directory: **`.`**. Guarda.
+
+Netlify desplegará `index.html` y, a partir de ahí, cada `git push` republica el sitio.
+
+**Atajo sin git:** en la pestaña *Deploys* del sitio hay una zona para arrastrar una carpeta. Arrastra la carpeta del proyecto y se actualiza la misma URL (pero no se actualizará sola la próxima vez).
+
+**Si el sitio viejo avisa de que «el almacenamiento local no está disponible»:** es un problema de esa versión, no del navegador. Esta compila el mismo origen (`https://…`) donde `localStorage` sí funciona; puedes verificarlo en *Progreso → Copia .json*.
+
 ## Estructura
 
 ```
