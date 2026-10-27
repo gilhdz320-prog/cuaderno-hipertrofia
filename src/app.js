@@ -1589,6 +1589,7 @@
   let AI_RESULT = null;
   let AI_BUSY = false;
   let AI_PROMPT = '';
+  let AI_UNDO = null;
 
   function viewSettings() {
     const wrap = el('div', { class: 'stack' });
@@ -1755,6 +1756,7 @@
    * ------------------------------------------------------------------ */
   const AI_KEY_LS = 'cuaderno.aikey';
   const AI_MODEL_LS = 'cuaderno.aimodel';
+  const AI_OK_LS = 'cuaderno.aiok';
   const AI_MODELS = [
     ['gpt-4o-mini', 'gpt-4o-mini · rápido y barato'],
     ['gpt-4o', 'gpt-4o · mejor criterio'],
@@ -1762,6 +1764,8 @@
   ];
 
   function aiKey() { try { return localStorage.getItem(AI_KEY_LS) || ''; } catch (e) { return ''; } }
+  function aiVerified() { try { return !!localStorage.getItem(AI_OK_LS); } catch (e) { return false; } }
+  function setAiVerified(v) { try { if (v) localStorage.setItem(AI_OK_LS, String(Date.now())); else localStorage.removeItem(AI_OK_LS); } catch (e) {} }
   function aiModel() { try { return localStorage.getItem(AI_MODEL_LS) || 'gpt-4o-mini'; } catch (e) { return 'gpt-4o-mini'; } }
 
   async function aiChat(messages, opts) {
@@ -1864,6 +1868,7 @@
     built.forEach((d, i) => { d.weekday = wd[i] || (i + 1); });
     const program = { n: built.length, label: built.length + ' días · propuesta IA', note: plan.notes || '', days: built };
     if (CE.countSets(program) > 76) CE.fitToTarget(program, EX);
+    AI_UNDO = { program: JSON.parse(JSON.stringify(S.program)), freq: S.block.freq };
     S.program = program;
     S.block.freq = built.length;
     save(true);
@@ -1903,8 +1908,10 @@
     AI_BUSY = true; AI_RESULT = null; render();
     try {
       const raw = await aiChat([{ role: 'user', content: 'Responde solo: conexión correcta' }], { temperature: 0 });
-      AI_RESULT = { kind: 'text', title: 'Conexión', text: raw.trim() };
+      setAiVerified(true);
+      AI_RESULT = { kind: 'text', title: 'Conexión correcta', text: raw.trim() };
     } catch (e) {
+      setAiVerified(false);
       AI_RESULT = { kind: 'error', text: e.message || String(e) };
     }
     AI_BUSY = false; render();
@@ -1915,7 +1922,10 @@
     const hasKey = !!aiKey();
     card.appendChild(el('div', { class: 'card-title' },
       el('h2', { text: 'Asistente' }),
-      el('span', { class: 'chip ' + (hasKey ? 'green' : ''), text: hasKey ? 'conectado' : 'sin clave' })
+      el('span', {
+        class: 'chip ' + (aiVerified() ? 'green' : hasKey ? 'amber' : ''),
+        text: aiVerified() ? 'probado y conectado' : hasKey ? 'clave guardada, sin probar' : 'sin clave'
+      })
     ));
     card.appendChild(el('p', { class: 'hint', text: 'Propone programas y revisa tu progreso. La clave es tuya, se guarda solo en este navegador y las llamadas van directas a OpenAI; nunca pasa por un servidor nuestro.' }));
 
@@ -1936,7 +1946,7 @@
           render(); toast('Clave guardada en este navegador');
         }
       }),
-      el('button', { class: 'btn sm ghost', text: 'Probar', disabled: AI_BUSY || !hasKey, onclick: aiTest }),
+      el('button', { class: 'btn sm', text: 'Probar', disabled: AI_BUSY || !hasKey, onclick: aiTest }),
       hasKey ? el('button', {
         class: 'btn sm ghost', text: 'olvidar',
         onclick: () => { try { localStorage.removeItem(AI_KEY_LS); } catch (e) {} render(); toast('Clave borrada'); }
@@ -1993,7 +2003,20 @@
     if (r.dropped && r.dropped.length) {
       box.appendChild(el('div', { class: 'tiny amber', style: { marginTop: '8px' }, text: 'Descartado: ' + r.dropped.join(', ') }));
     }
-    box.appendChild(el('div', { class: 'tiny muted', style: { marginTop: '8px' }, text: 'Tonelaje previsto ' + tn(r.tonnage) + '. Aplicado al programa; revísalo en la pestaña Programa.' }));
+    box.appendChild(el('div', { class: 'tiny muted', style: { marginTop: '8px' }, text: 'Tonelaje previsto ' + tn(r.tonnage) + '. Ya está aplicado: revísalo en Programa.' }));
+    if (AI_UNDO) {
+      box.appendChild(el('div', { class: 'row', style: { marginTop: '8px' } },
+        el('button', {
+          class: 'btn sm', text: 'Deshacer y volver a mi programa anterior',
+          onclick: () => {
+            S.program = AI_UNDO.program;
+            S.block.freq = AI_UNDO.freq;
+            AI_UNDO = null; AI_RESULT = null;
+            save(true); render(); toast('Programa anterior restaurado');
+          }
+        })
+      ));
+    }
     return box;
   }
 
