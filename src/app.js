@@ -1943,7 +1943,21 @@
       }) : null
     ));
     if (!hasKey) {
-      card.appendChild(el('p', { class: 'ai-warn', style: { marginTop: '8px' }, text: 'Créala en platform.openai.com → API keys. Recomendado: una clave solo para esto y con límite de gasto mensual.' }));
+      const help = el('div', { class: 'banner', style: { marginTop: '10px', flexDirection: 'column', alignItems: 'stretch', gap: '6px' } });
+      help.appendChild(el('b', { text: 'Cómo conseguir la clave (2 minutos)' }));
+      const steps = el('ol', { style: { margin: '4px 0 0 18px', padding: '0', fontSize: '.82rem', lineHeight: '1.6' } });
+      steps.appendChild(el('li', {}, 'Entra en ', el('a', { href: 'https://platform.openai.com/api-keys', target: '_blank', rel: 'noopener', text: 'platform.openai.com/api-keys' }), ' e inicia sesión (o crea la cuenta).'));
+      steps.appendChild(el('li', {}, 'Si es la primera vez, añade saldo en ', el('a', { href: 'https://platform.openai.com/settings/organization/billing/overview', target: '_blank', rel: 'noopener', text: 'Billing' }), '. La API es de pago por uso, no entra con ChatGPT Plus.'));
+      steps.appendChild(el('li', {}, 'Pulsa <b>Create new secret key</b>, ponle nombre (por ejemplo «cuaderno») y crea.'));
+      steps.appendChild(el('li', {}, 'Copia la clave: empieza por <span class="mono">sk-</span> y solo se muestra una vez.'));
+      steps.appendChild(el('li', {}, 'Pégala arriba, pulsa <b>Guardar clave</b> y luego <b>Probar</b>.'));
+      help.appendChild(steps);
+      help.appendChild(el('div', { class: 'row tight', style: { marginTop: '6px' } },
+        el('a', { class: 'btn sm', href: 'https://platform.openai.com/api-keys', target: '_blank', rel: 'noopener', text: 'Abrir OpenAI → API keys' }),
+        el('a', { class: 'btn sm ghost', href: 'https://platform.openai.com/settings/organization/limits', target: '_blank', rel: 'noopener', text: 'Poner límite de gasto' })
+      ));
+      help.appendChild(el('div', { class: 'ai-warn', style: { marginTop: '6px' }, text: 'Recomendado: una clave solo para el cuaderno y con límite mensual. Si la clave se filtra, se borra y se crea otra.' }));
+      card.appendChild(help);
     }
 
     card.appendChild(el('hr', { class: 'sep' }));
