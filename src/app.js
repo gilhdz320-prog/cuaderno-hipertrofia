@@ -1567,6 +1567,10 @@
   }
 
   function setupPWA() {
+    /* En iOS una PWA sin usar puede perder el almacenamiento; esto lo reduce. */
+    if (navigator.storage && navigator.storage.persist) {
+      navigator.storage.persist().catch(function () {});
+    }
     const btn = $('#installBtn');
     window.addEventListener('beforeinstallprompt', (ev) => {
       ev.preventDefault();

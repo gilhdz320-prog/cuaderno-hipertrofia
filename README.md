@@ -91,27 +91,47 @@ En déficit, pasar de 8 a 10 repeticiones con el mismo peso es progresar. El ré
 
 La app calcula la semana desde la fecha de inicio del bloque y aplica la descarga sola.
 
-## Desplegar en Netlify
+## Instalar en el móvil (PWA)
 
-El repositorio ya trae `netlify.toml`: es un sitio estático sin build (`publish = "."`).
+La app es una **PWA instalable**: manifiesto, iconos, service worker y caché versionada. Instalada se abre a pantalla completa y funciona **sin cobertura**, que es lo que hace falta en un sótano de gimnasio.
 
-**Pasos (una vez), para que `powerbuilgin.netlify.app` sirva esta versión y se actualice sola con cada push:**
+**iPhone / Safari:** abre la URL → Compartir → *Añadir a pantalla de inicio*.
 
-1. Netlify → tu sitio → *Site configuration* → *Build & deploy* → *Continuous deployment* → **Link repository**.
-2. Elige GitHub → `cuaderno-hipertrofia` → rama `main`.
-3. Build command: **vacío**. Publish directory: **`.`**. Guarda.
+**Android / Chrome:** abre la URL → aparece el botón **Instalar** en la cabecera (o menú → *Instalar aplicación*).
 
-Netlify desplegará `index.html` y, a partir de ahí, cada `git push` republica el sitio.
+Qué queda cacheado: el HTML completo (la app entera), el manifiesto y los iconos. El service worker usa *red primero* para la navegación y caché para el resto: si hay conexión recibes la versión nueva, y si no, abre la última que viste.
 
-**Atajo sin git:** en la pestaña *Deploys* del sitio hay una zona para arrastrar una carpeta. Arrastra la carpeta del proyecto y se actualiza la misma URL (pero no se actualizará sola la próxima vez).
+### Dónde publicarla
 
-**Si el sitio viejo avisa de que «el almacenamiento local no está disponible»:** es un problema de esa versión, no del navegador. Esta compila el mismo origen (`https://…`) donde `localStorage` sí funciona; puedes verificarlo en *Progreso → Copia .json*.
+La PWA funciona igual en cualquiera de los tres, pero **el origen importa**: los datos se guardan por dominio. Si instalas desde uno y luego te mudas, el cuaderno instalado y el nuevo no comparten registros (se pasan con *Progreso → Copia .json*). Decide la URL definitiva **antes** de instalarla en el móvil.
+
+| Opción | Estado | Cuándo |
+|---|---|---|
+| **GitHub Pages** | ya activo: <https://gilhdz320-prog.github.io/cuaderno-hipertrofia/> | ahora mismo, sin configurar nada |
+| **Vercel** | listo para importar (`vercel.json` incluido) | si quieres dominio propio, CDN y despliegues por push |
+| **Netlify** | opcional (`netlify.toml` incluido) | solo si quieres conservar `powerbuilgin.netlify.app` |
+
+**Vercel (recomendado si vas a mudarte):** <https://vercel.com/new> → importa `cuaderno-hipertrofia` → framework *Other*, build command vacío, output directory `.` → Deploy. Queda en `cuaderno-hipertrofia.vercel.app` y cada push republica.
+
+**Netlify:** en el sitio, *Site configuration → Build & deploy → Link repository* → elige el repo, rama `main`, build vacío, publish `.`.
+
+### Comprobarlo tú
+
+```bash
+npm run pwa https://tu-url
+```
+
+Verifica manifiesto, iconos, instalabilidad, service worker y que la app abre sin conexión. Ahora mismo pasa 15/15 contra el sitio publicado.
 
 ## Estructura
 
 ```
 .
 ├── index.html                  app completa (generada; no editar a mano)
+├── manifest.webmanifest        PWA: nombre, iconos, atajos
+├── sw.js                       service worker (generado; caché con hash)
+├── icons/                      iconos 192, 512, maskable y apple-touch
+├── vercel.json                 cabeceras de caché para Vercel
 ├── cuaderno-bloque.pdf         documento del bloque
 ├── abrir-cuaderno.command      lanzador con servidor local
 ├── src/
@@ -123,7 +143,9 @@ Netlify desplegará `index.html` y, a partir de ahí, cada `git push` republica 
 ├── tools/
 │   ├── e2e.mjs                 21 pruebas de interacción en Chrome real
 │   ├── shot.mjs                capturas con emulación de móvil
-│   └── pdf.sh                  genera el PDF
+│   ├── pdf.sh                  genera el PDF
+│   ├── icons.py                regenera los iconos
+│   └── pwa-check.mjs           15 comprobaciones de PWA en Chrome real
 ├── build.mjs                   empaqueta src/ en index.html
 └── .github/workflows/tests.yml CI: motor + verificación del HTML
 ```
@@ -137,6 +159,7 @@ npm run build   # regenera index.html desde src/
 npm test        # 12 pruebas del motor
 npm run e2e     # 21 pruebas de interacción (necesita Chrome)
 npm run pdf     # regenera cuaderno-bloque.pdf (necesita Chrome)
+npm run pwa <url>  # comprueba manifiesto, SW y offline contra una URL
 ```
 
 `index.html` está versionado a propósito: así GitHub Pages lo sirve sin construir nada. La CI falla si lo editas sin reconstruirlo.

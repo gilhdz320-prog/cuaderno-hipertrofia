@@ -51,15 +51,22 @@ await sleep(2500);
 const out = { url, checks: [] };
 const check = (name, pass, detail) => out.checks.push({ name, pass: !!pass, detail: detail === undefined ? '' : String(detail) });
 
-/* manifiesto */
+/* manifiesto: se valida el JSON que sirve el sitio, no la vista interna de CDP */
 try {
   const man = await send('Page.getAppManifest');
-  const parsed = man.parsed || {};
   check('manifiesto enlazado', !!man.url, man.url);
   check('manifiesto sin errores', !(man.errors && man.errors.length), JSON.stringify(man.errors || []));
-  check('nombre y short_name', !!parsed.name && !!parsed.short_name, parsed.name + ' / ' + parsed.short_name);
-  check('display standalone', parsed.display === 'standalone', parsed.display);
-  check('iconos 192 y 512', (parsed.icons || []).some(i => /192/.test(i.sizes)) && (parsed.icons || []).some(i => /512/.test(i.sizes)), (parsed.icons || []).map(i => i.sizes).join(','));
+
+  const raw = await ev("(async () => { const l = document.querySelector('link[rel=manifest]'); const r = await fetch(l.href, {cache:'no-store'}); return await r.text(); })()", true);
+  const m = JSON.parse(raw);
+  check('name y short_name', !!m.name && !!m.short_name, m.name + ' / ' + m.short_name);
+  check('display standalone', m.display === 'standalone', m.display);
+  check('start_url y scope', !!m.start_url && !!m.scope, m.start_url + ' · ' + m.scope);
+  const sizes = (m.icons || []).map(i => i.sizes);
+  check('iconos 192 y 512', sizes.some(s => s === '192x192') && sizes.some(s => s === '512x512'), sizes.join(','));
+  check('icono maskable', (m.icons || []).some(i => /maskable/.test(i.purpose || '')), (m.icons || []).map(i => i.purpose || 'any').join(','));
+  const iconStatus = await ev("(async () => { const l = document.querySelector('link[rel=manifest]'); const r = await fetch(l.href, {cache:'no-store'}); const m = await r.json(); const out = []; for (const i of m.icons) { const res = await fetch(i.src); out.push(i.sizes + ':' + res.status); } return out.join(' '); })()", true);
+  check('iconos responden 200', !/:(?!200)/.test(iconStatus), iconStatus);
 } catch (e) {
   check('manifiesto enlazado', false, e.message);
 }
