@@ -110,6 +110,42 @@ check('sube series al pulsar +', (await ev("document.querySelector('.slot-edit .
 /* exportación */
 check('exporta csv', await ev("(function(){var a=document.createElement('a');return typeof Blob!=='undefined'})()"));
 
+/* ---------- perfiles ---------- */
+await ev("document.querySelector('[data-tab=ajustes]').click()");
+await sleep(500);
+check('Ajustes tiene las secciones', (await ev("document.querySelectorAll('.card h2').length")) >= 4, await ev("Array.from(document.querySelectorAll('.card h2')).map(h=>h.textContent).join(' | ')"));
+
+const logsAntes = await ev("Object.keys(Cuaderno.state().logs).length");
+await ev("document.querySelector('#profileBtn').click()");
+await sleep(300);
+check('abre el panel de perfiles', await ev("!document.getElementById('modal').hidden"));
+await ev("[...document.querySelectorAll('.sheet button')].find(b=>b.textContent.includes('Nuevo perfil')).click()");
+await sleep(300);
+await ev("(function(){var i=document.querySelector('.sheet input[type=text]'); i.value='Prueba'; i.dispatchEvent(new Event('input')); [...document.querySelectorAll('.sheet-actions button')].find(b=>b.textContent==='Guardar').click(); return 1})()");
+await sleep(600);
+check('crea y activa el perfil nuevo', (await ev("document.getElementById('profileName').textContent")) === 'Prueba', await ev("document.getElementById('profileName').textContent"));
+check('el perfil nuevo empieza sin registros', (await ev("Object.keys(Cuaderno.state().logs).length")) === 0);
+check('el perfil nuevo tiene su propio programa', (await ev("Cuaderno.state().program.days.length")) >= 2, await ev("Cuaderno.state().program.days.length"));
+
+/* ---------- equipo: sin poleas ---------- */
+await ev("document.querySelector('[data-tab=ajustes]').click()");
+await sleep(400);
+await ev("(function(){var l=[...document.querySelectorAll('.equip')].find(x=>/Poleas/.test(x.textContent)); l.querySelector('input').click(); return 1})()");
+await sleep(600);
+const sinPolea = await ev("(function(){var S=Cuaderno.state(); var m=Cuaderno.engine.getExMap(S.custom); var bad=S.program.days.flatMap(function(d){return d.slots.map(function(s){return s.ex})}).filter(function(id){return !Cuaderno.engine.isAvailable(m[id], S.equipment)}); return JSON.stringify({bad:bad, n:S.program.days.length})})()");
+check('sin poleas no queda ningún ejercicio de polea', JSON.parse(sinPolea).bad.length === 0, sinPolea);
+check('el programa sigue completo sin poleas', JSON.parse(sinPolea).n === (await ev("Cuaderno.state().block.freq")), sinPolea + ' vs ' + await ev("Cuaderno.state().block.freq"));
+
+/* ---------- volver al perfil anterior ---------- */
+await ev("document.querySelector('#profileBtn').click()");
+await sleep(300);
+await ev("[...document.querySelectorAll('.sheet button')].find(b=>b.textContent==='usar').click()");
+await sleep(500);
+check('vuelve al primer perfil', (await ev("document.getElementById('profileName').textContent")) !== 'Prueba', await ev("document.getElementById('profileName').textContent"));
+check('conserva los registros del primer perfil', (await ev("Object.keys(Cuaderno.state().logs).length")) === logsAntes, logsAntes + ' → ' + await ev("Object.keys(Cuaderno.state().logs).length"));
+const sigueGuardada = await ev("(function(){var L=Cuaderno.state().logs; return Object.keys(L).some(function(d){return Object.keys(L[d].entries||{}).some(function(e){return (L[d].entries[e].sets||[]).some(function(s){return s&&s.done})})})})()");
+check('la serie marcada sigue guardada en sus datos', sigueGuardada === true, sigueGuardada);
+
 check('sin excepciones de JavaScript', exceptions.length === 0, exceptions.join(' | '));
 
 console.log(JSON.stringify(results.map(r => (r.pass ? 'PASS ' : 'FAIL ') + r.name + (r.detail ? '  [' + r.detail + ']' : '')), null, 1));

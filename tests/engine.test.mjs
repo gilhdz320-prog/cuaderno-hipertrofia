@@ -153,3 +153,72 @@ test('las sustituciones de ejercicio sobreviven al cambiar de frecuencia', () =>
   assert.equal(p3.days[0].slots[0].ex, 'hip_thrust_smith', 'se mantiene en 3 días');
   assert.equal(p3.days[1].slots[0].ex, 'bench', 'la sesión fusionada conserva sus propios ejercicios');
 });
+
+test('equipamiento: qué necesita cada ejercicio y qué hay disponible', () => {
+  const ex = CE.getExMap([]);
+  assert.deepEqual(CE.requiredEquipment(ex.bench).sort(), ['banco', 'barra']);
+  assert.equal(CE.isAvailable(ex.bench, ['barra', 'banco']), true);
+  assert.equal(CE.isAvailable(ex.bench, ['barra']), false, 'sin banco no hay banca');
+  assert.equal(CE.isAvailable(ex.pullup, []), false, 'sin barra de dominadas no hay dominadas');
+  assert.equal(CE.isAvailable(ex.pushup, []), true, 'el peso corporal siempre está');
+  assert.equal(CE.isAvailable(ex.bench, null), true, 'sin configurar = todo disponible');
+});
+
+test('sustitución: busca la mejor opción con el material disponible', () => {
+  const ex = CE.getExMap([]);
+  const alt = CE.pickAlternative('bulgarian', { exMap: ex, equipment: ['barra', 'mancuernas', 'banco', 'barra_dominadas'] });
+  assert.ok(alt, 'debe encontrar sustituto');
+  assert.ok(CE.isAvailable(ex[alt], ['barra', 'mancuernas', 'banco', 'barra_dominadas']));
+  assert.notEqual(alt, 'leg_ext', 'prefiere un compuesto antes que un aislamiento');
+});
+
+test('restricciones: el programa no deja ejercicios imposibles', () => {
+  const ex = CE.getExMap([]);
+  for (const equipo of [['barra', 'banco', 'mancuernas'], ['mancuernas', 'banco'], ['barra_dominadas', 'accesorio'], []]) {
+    const p = CE.buildProgram({ n: 4, exMap: ex, equipment: equipo });
+    p.days.forEach((d) => d.slots.forEach((s) => {
+      /* o está disponible, o queda marcado para que la interfaz lo explique */
+      assert.ok(CE.isAvailable(ex[s.ex], equipo) || s.flagged === 'sin-equipo',
+        `${ex[s.ex].name} no está disponible con ${equipo.join(',') || 'nada'} y no está marcado`);
+    }));
+    assert.ok(CE.countSets(p) >= 40, 'el programa sigue teniendo volumen');
+  }
+});
+
+test('sin material el programa es de peso corporal', () => {
+  const ex = CE.getExMap([]);
+  const p = CE.buildProgram({ n: 3, exMap: ex, equipment: [] });
+  const ids = p.days.flatMap((d) => d.slots.map((s) => s.ex));
+  assert.ok(ids.indexOf('bench') < 0);
+  assert.ok(ids.indexOf('hip_thrust') < 0);
+});
+
+test('un ejercicio marcado como «no me gusta» se sustituye', () => {
+  const ex = CE.getExMap([]);
+  const p = CE.buildProgram({ n: 4, exMap: ex, prefs: { bulgarian: 'dislike' } });
+  const ids = p.days.flatMap((d) => d.slots.map((s) => s.ex));
+  assert.ok(ids.indexOf('bulgarian') < 0, 'no debe aparecer');
+  assert.ok(ids.length > 10);
+});
+
+test('migración: un perfil antiguo se convierte en multiusuario sin perder datos', () => {
+  const viejo = CE.defaultState('2026-10-26');
+  viejo.logs['2026-10-26'] = { entries: { bench: { sets: [{ reps: 8, load: 40, rir: 2, done: true }] } } };
+  const db = CE.migrateState(viejo);
+  assert.equal(db.version, 3);
+  const perfil = db.profiles[db.activeId];
+  assert.ok(perfil, 'hay perfil activo');
+  assert.equal(Object.keys(perfil.logs).length, 1, 'conserva los registros');
+  assert.ok(Array.isArray(perfil.equipment) && perfil.equipment.length > 3, 'equipo por defecto completo');
+  assert.equal(db.profiles[perfil.id].prefs && typeof db.profiles[perfil.id].prefs, 'object');
+});
+
+test('migración: dos perfiles conviven y uno no ve los datos del otro', () => {
+  const a = CE.normalizeProfile({ name: 'Ana' });
+  const b = CE.normalizeProfile({ name: 'Bea' });
+  a.logs['2026-10-26'] = { entries: { bench: { sets: [{ reps: 8, load: 40 }] } } };
+  const db = CE.migrateState({ version: 3, activeId: a.id, profiles: { [a.id]: a, [b.id]: b } });
+  assert.equal(Object.keys(db.profiles).length, 2);
+  assert.equal(Object.keys(db.profiles[a.id].logs).length, 1);
+  assert.equal(Object.keys(db.profiles[b.id].logs).length, 0);
+});

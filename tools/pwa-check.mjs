@@ -98,7 +98,7 @@ await sleep(2200);
 const offline = await ev("(function(){var h=document.querySelector('#view h1');return h?h.textContent:'SIN RENDER';})()");
 check('abre sin conexión', offline && offline !== 'SIN RENDER', offline);
 const tabs = await ev("document.querySelectorAll('.tab').length");
-check('conserva la interfaz sin conexión', tabs === 5, tabs + ' pestañas');
+check('conserva la interfaz sin conexión', tabs === 6, tabs + ' pestañas');
 
 await send('Network.emulateNetworkConditions', { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
 check('sin excepciones de JavaScript', exceptions.length === 0, exceptions.join(' | '));

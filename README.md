@@ -1,6 +1,8 @@
 # Cuaderno · Hipertrofia en déficit
 
-Programa de entrenamiento de hipertrofia para **4 días por semana que se reajusta solo** si esa semana solo puedes ir 2, 3, 5 o 6. Calcula volumen semanal, tonelaje, progresión y descargas, y guarda cada serie con sus kilos, repeticiones y RIR.
+Cuaderno de entrenamiento de hipertrofia **para varias personas en el mismo dispositivo**, con 4 días por semana que se reajustan solos si esa semana solo puedes ir 2, 3, 5 o 6. Tiene en cuenta **el material que tienes**, **los ejercicios que no quieres** y calcula volumen, tonelaje, progresión y descargas. Cada serie se guarda con sus kilos, repeticiones y RIR.
+
+Incluye un **asistente con tu propia clave de OpenAI** que propone semanas y revisa el progreso; el motor determinista valida y aplica la propuesta.
 
 **App:** <https://cuaderno-hipertrofia-chi.vercel.app>
 
@@ -37,7 +39,7 @@ Abre [`cuaderno-bloque.pdf`](cuaderno-bloque.pdf) o usa el botón *Imprimir* den
 
 > **Dónde se guardan los datos.** En el navegador, en el almacenamiento local del origen desde el que abres la app. No hay servidor ni cuenta. Si abres el archivo con `file://` y tu navegador bloquea el almacenamiento, verás un aviso: en ese caso usa el lanzador. Para mover el cuaderno de dispositivo: *Progreso → Copia .json*.
 
-## Las cinco pestañas
+## Las seis pestañas
 
 | Pestaña | Para qué |
 |---|---|
@@ -46,6 +48,38 @@ Abre [`cuaderno-bloque.pdf`](cuaderno-bloque.pdf) o usa el botón *Imprimir* den
 | **Programa** | Editar ejercicios, series, rango de reps, RIR, descanso y orden. Biblioteca de ejercicios propios y ajustes del bloque. |
 | **Progreso** | Tonelaje por semana, preparación, carga y próxima subida por ejercicio, medidas corporales, exportar CSV/JSON. |
 | **El bloque** | El documento completo, con las tablas generadas desde el programa real. |
+
+## Varias personas, cada una con lo suyo
+
+El botón de la cabecera cambia de perfil. Cada perfil guarda **por separado** su programa, sus cargas, sus registros, sus medidas, su material y sus gustos. Un perfil nuevo empieza limpio: no hereda ni series ni kilos del otro.
+
+Los datos se guardan en el navegador: si dos personas usan el mismo móvil, comparten dispositivo pero no cuaderno. La copia `.json` incluye todos los perfiles.
+
+## Material y gustos: el programa se adapta
+
+En **Ajustes → Material** desmarcas lo que no tengas (poleas, máquinas, Smith, banco, trap bar…). El motor sustituye cada ejercicio imposible por la mejor alternativa del mismo patrón y músculo, con el material que sí tienes, y avisa de lo que se cambió. Si no hay alternativa, la deja marcada como **«necesita …»** en vez de fingir que puedes hacerla.
+
+En **Ajustes → Ejercicios que no quieres** marcas «no» y se sustituye al momento; «sí» hace que se prefiera cuando hay empate.
+
+Ejemplos reales del motor:
+
+| Material | Programa resultante |
+|---|---|
+| Gimnasio completo | El del documento, 67 series, sin cambios |
+| Barra + mancuernas + banco | Hip thrust, RDL, good morning, dominadas, remo con mancuerna… |
+| Solo mancuernas y banco | Puente a una pierna, RDL con mancuernas, press con mancuernas, pájaros, fondos en banco… |
+| Sin material | Flexiones, fondos, sentadilla a una pierna, almeja, puente a una pierna, sissy squat… |
+
+## Asistente (tu clave de OpenAI)
+
+En **Ajustes → Asistente** pegas tu clave (`sk-…`). Se guarda **solo en ese navegador**, nunca se incluye en las copias `.json` y las llamadas van directas a `api.openai.com`: no pasa por ningún servidor intermedio.
+
+Dos acciones:
+
+- **Diseñar mi semana**: escribes tus condiciones en lenguaje normal («3 días, tengo barra y mancuernas, no me gusta la búlgara, prioridad glúteo, sesiones de 60 minutos») y devuelve una semana. El motor **valida** cada ejercicio contra el catálogo, tu material y tus gustos, recorta lo que no encaja y lo aplica al programa.
+- **Revisar mi progreso**: le pasa tus últimas 4 semanas (series, tonelaje, preparación, volumen por músculo) y devuelve qué ajustar.
+
+La IA propone; el motor decide. Si la clave falla o no hay cuota, la app lo dice y sigue funcionando igual.
 
 ## Cómo se reajusta al número de días
 
@@ -143,9 +177,9 @@ Verifica manifiesto, iconos, instalabilidad, service worker y que la app abre si
 │   ├── styles.css
 │   ├── engine.js               lógica pura: volumen, tonelaje, progresión, fases
 │   └── app.js                  interfaz
-├── tests/engine.test.mjs       12 pruebas del motor
+├── tests/engine.test.mjs       19 pruebas del motor
 ├── tools/
-│   ├── e2e.mjs                 21 pruebas de interacción en Chrome real
+│   ├── e2e.mjs                 31 pruebas de interacción en Chrome real
 │   ├── shot.mjs                capturas con emulación de móvil
 │   ├── pdf.sh                  genera el PDF
 │   ├── icons.py                regenera los iconos
@@ -162,8 +196,8 @@ Requiere Node ≥ 20 (sin dependencias).
 ```bash
 npm run build   # regenera index.html y sw.js desde src/
 npm run pack    # genera public/ (app + PWA + PDF) para desplegar
-npm test        # 12 pruebas del motor
-npm run e2e     # 21 pruebas de interacción (necesita Chrome)
+npm test        # 19 pruebas del motor
+npm run e2e     # 31 pruebas de interacción (necesita Chrome)
 npm run pdf     # regenera cuaderno-bloque.pdf (necesita Chrome)
 npm run pwa <url>  # comprueba manifiesto, SW y offline contra una URL
 ```

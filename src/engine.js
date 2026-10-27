@@ -61,7 +61,7 @@
   const EX_POOL = {
     /* --- glúteo / cadera --- */
     hip_thrust:      { name: 'Hip thrust con barra',      pattern: 'hip_thrust', equipment: 'barra',   primary: 'glute',      secondary: ['ham'],                incPct: 5,    axial: 0, unilateral: false, rest: 180, bwFactor: 1.10, step: 2.5, cue: 'Costillas abajo, mirada al frente, pausa de 1 s arriba.' },
-    hip_thrust_smith:{ name: 'Hip thrust en Smith',       pattern: 'hip_thrust', equipment: 'máquina', primary: 'glute',      secondary: ['ham'],                incPct: 5,    axial: 0, unilateral: false, rest: 180, bwFactor: 1.20, step: 2.5, cue: 'Mismo recorrido, apoyo más estable.' },
+    hip_thrust_smith:{ name: 'Hip thrust en Smith',       pattern: 'hip_thrust', equipment: 'smith', primary: 'glute',      secondary: ['ham'],                incPct: 5,    axial: 0, unilateral: false, rest: 180, bwFactor: 1.20, step: 2.5, cue: 'Mismo recorrido, apoyo más estable.' },
     bridge_bb:       { name: 'Puente de glúteo',          pattern: 'hip_thrust', equipment: 'barra',   primary: 'glute',      secondary: ['ham'],                incPct: 5,    axial: 0, unilateral: false, rest: 120, bwFactor: 0.90, step: 2.5, cue: 'Rango corto: no busques hiperextensión.' },
     kickback:        { name: 'Patada de glúteo en polea', pattern: 'kickback',   equipment: 'polea',   primary: 'glute',      secondary: [],                     incPct: 5,    axial: 0, unilateral: true,  rest: 60,  bwFactor: 0.15, step: 2.5, cue: 'Cadera quieta; el movimiento es solo de cadera.' },
     abduction:       { name: 'Abducción de cadera',       pattern: 'abduction',  equipment: 'máquina', primary: 'glute_med',  secondary: [],                     incPct: 5,    axial: 0, unilateral: false, rest: 75,  bwFactor: 0.30, step: 2.5, cue: 'Torso ligeramente inclinado, sin rebote.' },
@@ -94,17 +94,184 @@
     triceps_oh:      { name: 'Extensión de tríceps sobre la cabeza', pattern: 'triceps', equipment: 'polea', primary: 'triceps', secondary: [],                    incPct: 2.5, axial: 0, unilateral: false, rest: 60,  bwFactor: 0.15, step: 2.5, cue: 'Estira el tríceps largo: es el que más crece.' },
     /* --- tirón --- */
     lat_pulldown:    { name: 'Jalón al pecho',            pattern: 'pull_v',     equipment: 'polea',   primary: 'back',       secondary: ['biceps'],             incPct: 2.5, axial: 0, unilateral: false, rest: 120, bwFactor: 0.45, step: 2.5, cue: 'Codos hacia el bolsillo, sin balanceo.' },
-    pullup:          { name: 'Dominadas',                 pattern: 'pull_v',     equipment: 'peso corporal', primary: 'back', secondary: ['biceps'],             incPct: 2.5, axial: 0, unilateral: false, rest: 150, bwFactor: 0.00, step: 2.5, cue: 'Si no salen 8, usa jalón o asistencia.' },
+    pullup:          { name: 'Dominadas',                 pattern: 'pull_v',     equipment: 'barra dominadas', primary: 'back', secondary: ['biceps'],             incPct: 2.5, axial: 0, unilateral: false, rest: 150, bwFactor: 0.00, step: 2.5, cue: 'Si no salen 8, usa jalón o asistencia.' },
     row_barbell:     { name: 'Remo con barra',            pattern: 'pull_h',     equipment: 'barra',   primary: 'back',       secondary: ['biceps'],             incPct: 2.5, axial: 1, unilateral: false, rest: 120, bwFactor: 0.45, step: 1.25, cue: 'Torso a 45°, sin tirones de lumbar.' },
     row_machine:     { name: 'Remo en máquina',           pattern: 'pull_h',     equipment: 'máquina', primary: 'back',       secondary: ['biceps'],             incPct: 2.5, axial: 0, unilateral: false, rest: 120, bwFactor: 0.50, step: 2.5, cue: 'Pecho apoyado: cero trampa.' },
     row_cable_uni:   { name: 'Remo unilateral en polea',  pattern: 'pull_uni',   equipment: 'polea',   primary: 'back',       secondary: ['biceps'],             incPct: 2.5, axial: 0, unilateral: true,  rest: 90,  bwFactor: 0.30, step: 2.5, cue: 'Deja que la escápula avance y vuelva.' },
     /* --- brazos --- */
     biceps_curl:     { name: 'Curl de bíceps',            pattern: 'biceps',     equipment: 'mancuernas', primary: 'biceps',   secondary: [],                     incPct: 2.5, axial: 0, unilateral: false, rest: 60,  bwFactor: 0.09, step: 1, cue: 'Sin columpio; supinación completa arriba.' },
     hammer_curl:     { name: 'Curl martillo',             pattern: 'biceps',     equipment: 'mancuernas', primary: 'biceps',   secondary: [],                     incPct: 2.5, axial: 0, unilateral: false, rest: 60,  bwFactor: 0.10, step: 1, cue: 'Neutro: trabaja braquial y antebrazo.' },
+    /* --- variantes para casa / equipo limitado --- */
+    pushup:          { name: 'Flexiones',                     pattern: 'push_h',     equipment: 'peso corporal', primary: 'chest',      secondary: ['triceps', 'delt_front'], incPct: 2.5, axial: 0, unilateral: false, rest: 90,  bwFactor: 0.00, step: 2.5, cue: 'Cuerpo en línea, codos a 45°, sin hundir la cadera.' },
+    pushup_incline:  { name: 'Flexiones con pies elevados',    pattern: 'push_i',     equipment: 'peso corporal', primary: 'chest',      secondary: ['delt_front', 'triceps'], incPct: 2.5, axial: 0, unilateral: false, rest: 90,  bwFactor: 0.00, step: 2.5, cue: 'Más carga en la parte alta del pecho.' },
+    dips:            { name: 'Fondos en paralelas',            pattern: 'push_h',     equipment: 'peso corporal', primary: 'chest',      secondary: ['triceps', 'delt_front'], incPct: 2.5, axial: 0, unilateral: false, rest: 120, bwFactor: 0.00, step: 2.5, cue: 'Torso inclinado; sin balanceo ni caída brusca.' },
+    db_bench:        { name: 'Press de banca con mancuernas',   pattern: 'push_h',     equipment: 'mancuernas',    primary: 'chest',      secondary: ['triceps', 'delt_front'], incPct: 2.5, axial: 0, unilateral: false, rest: 150, bwFactor: 0.20, step: 2,   cue: 'Escápulas retraídas; baja hasta que el codo pase el banco.' },
+    db_ohp:          { name: 'Press militar con mancuernas',    pattern: 'push_v',     equipment: 'mancuernas',    primary: 'delt_front', secondary: ['triceps'],            incPct: 2.5, axial: 0, unilateral: false, rest: 120, bwFactor: 0.12, step: 2,   cue: 'Sentado con respaldo: menos carga lumbar.' },
+    row_db:          { name: 'Remo con mancuerna a una mano',   pattern: 'pull_uni',   equipment: 'mancuernas',    primary: 'back',       secondary: ['biceps'],             incPct: 2.5, axial: 0, unilateral: true,  rest: 90,  bwFactor: 0.22, step: 2,   cue: 'Apoya una mano en el banco; tira con el codo.' },
+    inverted_row:    { name: 'Remo invertido',                 pattern: 'pull_h',     equipment: 'barra dominadas', primary: 'back',       secondary: ['biceps'],             incPct: 2.5, axial: 0, unilateral: false, rest: 90,  bwFactor: 0.00, step: 2.5, cue: 'Cuerpo recto; junta las escápulas arriba.' },
+    band_row:        { name: 'Remo con banda',                 pattern: 'pull_h',     equipment: 'accesorio',     primary: 'back',       secondary: ['biceps'],             incPct: 2.5, axial: 0, unilateral: false, rest: 75,  bwFactor: 0.00, step: 1,   cue: 'Ancla la banda a la altura del pecho.' },
+    curl_bar:        { name: 'Curl con barra',                 pattern: 'biceps',     equipment: 'barra',         primary: 'biceps',     secondary: [],                     incPct: 2.5, axial: 0, unilateral: false, rest: 60,  bwFactor: 0.20, step: 1.25, cue: 'Sin balanceo; la barra sube pegada.' },
+    curl_cable:      { name: 'Curl en polea',                  pattern: 'biceps',     equipment: 'polea',         primary: 'biceps',     secondary: [],                     incPct: 2.5, axial: 0, unilateral: false, rest: 60,  bwFactor: 0.20, step: 2.5, cue: 'Tensión constante: bueno si te cuesta el rango bajo.' },
+    triceps_dip:     { name: 'Fondos en banco',                pattern: 'triceps',    equipment: 'peso corporal', primary: 'triceps',    secondary: [],                     incPct: 2.5, axial: 0, unilateral: false, rest: 60,  bwFactor: 0.00, step: 2.5, cue: 'Manos en el borde del banco, codos hacia atrás.' },
+    triceps_band:    { name: 'Extensión de tríceps con banda',  pattern: 'triceps',    equipment: 'accesorio',     primary: 'triceps',    secondary: [],                     incPct: 2.5, axial: 0, unilateral: false, rest: 60,  bwFactor: 0.00, step: 1,   cue: 'Codos fijos; estira del todo.' },
+    calf_db:         { name: 'Pantorrilla a una pierna con mancuerna', pattern: 'calf', equipment: 'mancuernas',   primary: 'calf',       secondary: [],                     incPct: 5,   axial: 0, unilateral: true,  rest: 60,  bwFactor: 0.35, step: 2,   cue: 'Talón en un escalón; pausa de 2 s arriba.' },
+    calf_bw:         { name: 'Pantorrilla a una pierna en escalón', pattern: 'calf',    equipment: 'peso corporal', primary: 'calf',       secondary: [],                     incPct: 5,   axial: 0, unilateral: true,  rest: 60,  bwFactor: 0.00, step: 2.5, cue: 'Controla el descenso: el estiramiento es el estímulo.' },
+    abduction_band:  { name: 'Abducción con banda',             pattern: 'abduction',  equipment: 'accesorio',     primary: 'glute_med',  secondary: [],                     incPct: 5,   axial: 0, unilateral: false, rest: 60,  bwFactor: 0.00, step: 1,   cue: 'Banda por encima de las rodillas; sin rebote.' },
+    bridge_bw:       { name: 'Puente de glúteo a una pierna',   pattern: 'hip_thrust', equipment: 'peso corporal', primary: 'glute',      secondary: ['ham'],                incPct: 5,   axial: 0, unilateral: true,  rest: 75,  bwFactor: 0.00, step: 2.5, cue: 'Empuja con el talón y aprieta arriba 2 s.' },
+    kickback_band:   { name: 'Patada de glúteo con banda',      pattern: 'kickback',   equipment: 'accesorio',     primary: 'glute',      secondary: [],                     incPct: 5,   axial: 0, unilateral: true,  rest: 60,  bwFactor: 0.00, step: 1,   cue: 'Sin mover la cadera; el rango es corto.' },
+    rdl_db:          { name: 'Peso muerto rumano con mancuernas', pattern: 'hinge',     equipment: 'mancuernas',    primary: 'ham',        secondary: ['glute'],              incPct: 5,   axial: 1, unilateral: false, rest: 150, bwFactor: 0.30, step: 2,   cue: 'Mancuernas pegadas a las piernas; cadera atrás.' },
+    sissy_squat:     { name: 'Sissy squat',                    pattern: 'knee_ext',   equipment: 'peso corporal', primary: 'quad',       secondary: [],                     incPct: 5,   axial: 0, unilateral: false, rest: 75,  bwFactor: 0.00, step: 2.5, cue: 'Rodillas adelante, cadera extendida.' },
+    step_up:         { name: 'Step-up al cajón',               pattern: 'lunge',      equipment: 'mancuernas',    primary: 'quad',       secondary: ['glute'],              incPct: 5,   axial: 0, unilateral: true,  rest: 120, bwFactor: 0.20, step: 2,   cue: 'Sube sin impulso; controla la bajada.' },
+    face_pull_band:  { name: 'Face pull con banda',             pattern: 'rear_delt',  equipment: 'accesorio',     primary: 'delt_rear',  secondary: ['back'],               incPct: 2.5, axial: 0, unilateral: false, rest: 60,  bwFactor: 0.00, step: 1,   cue: 'Banda a la altura de los ojos; codos altos.' },
+    lateral_band:    { name: 'Elevación lateral con banda',     pattern: 'lateral',    equipment: 'accesorio',     primary: 'delt_side',  secondary: [],                     incPct: 2.5, axial: 0, unilateral: false, rest: 60,  bwFactor: 0.00, step: 1,   cue: 'Pisa la banda y sube hasta la línea del hombro.' },
+
+    clamshell:       { name: 'Almeja (clamshell) con banda o sin ella', pattern: 'abduction', equipment: 'peso corporal', primary: 'glute_med', secondary: [], incPct: 5, axial: 0, unilateral: true,  rest: 60, bwFactor: 0.00, step: 2.5, cue: 'Talones juntos, rodillas separadas sin girar la pelvis.' },
+    rear_delt_db:    { name: 'Pájaros con mancuernas',         pattern: 'rear_delt',  equipment: 'mancuernas',    primary: 'delt_rear',  secondary: ['back'],               incPct: 2.5, axial: 0, unilateral: false, rest: 60,  bwFactor: 0.04, step: 1,   cue: 'Torso inclinado; sube con los codos, no con las manos.' },
+    kickback_bw:     { name: 'Patada de glúteo en cuadrupedia', pattern: 'kickback',   equipment: 'peso corporal', primary: 'glute',      secondary: [],                     incPct: 5,   axial: 0, unilateral: true,  rest: 60,  bwFactor: 0.00, step: 2.5, cue: 'Cadera quieta; aprieta el glúteo arriba.' },
+    triceps_kick_db: { name: 'Patada de tríceps con mancuerna', pattern: 'triceps',    equipment: 'mancuernas',    primary: 'triceps',    secondary: [],                     incPct: 2.5, axial: 0, unilateral: true,  rest: 60,  bwFactor: 0.06, step: 1,   cue: 'Codo fijo a la altura del torso; extiende del todo.' },
+    good_morning_bw: { name: 'Buenos días sin peso',            pattern: 'hinge',      equipment: 'peso corporal', primary: 'ham',        secondary: ['glute'],              incPct: 5,   axial: 0, unilateral: false, rest: 75,  bwFactor: 0.00, step: 2.5, cue: 'Cadera atrás, espalda recta, isquios en tensión.' },
+    squat_bw:        { name: 'Sentadilla a una pierna asistida', pattern: 'squat',     equipment: 'peso corporal', primary: 'quad',       secondary: ['glute'],              incPct: 5,   axial: 0, unilateral: true,  rest: 90,  bwFactor: 0.00, step: 2.5, cue: 'Apóyate en una pared solo lo justo.' },
+
+    triceps_floor:   { name: 'Flexiones cerradas (tríceps)',   pattern: 'triceps',    equipment: 'peso corporal', primary: 'triceps',    secondary: ['chest'],              incPct: 2.5, axial: 0, unilateral: false, rest: 60,  bwFactor: 0.00, step: 2.5, cue: 'Manos juntas; codos pegados al torso.' },
+
+    pike_pushup:     { name: 'Flexiones en pico',              pattern: 'push_v',     equipment: 'peso corporal', primary: 'delt_front', secondary: ['triceps'],            incPct: 2.5, axial: 0, unilateral: false, rest: 90,  bwFactor: 0.00, step: 2.5, cue: 'Cadera arriba, corona la cabeza entre las manos.' },
+
+    curl_band:       { name: 'Curl con banda',                 pattern: 'biceps',     equipment: 'accesorio',     primary: 'biceps',     secondary: [],                     incPct: 2.5, axial: 0, unilateral: false, rest: 60,  bwFactor: 0.00, step: 1,   cue: 'Pisa la banda; sube controlando la bajada.' },
+
     /* --- core --- */
     ab_wheel:        { name: 'Rueda abdominal',           pattern: 'core',       equipment: 'accesorio', primary: 'core',     secondary: [],                     incPct: 5,    axial: 0, unilateral: false, rest: 60,  bwFactor: 0.00, step: 2.5, cue: 'Costillas cerradas; no dejes caer la lumbar.' },
     plank:           { name: 'Plancha',                   pattern: 'core',       equipment: 'peso corporal', primary: 'core', secondary: [],                    incPct: 5,    axial: 0, unilateral: false, rest: 60,  bwFactor: 0.00, step: 2.5, cue: 'Series por tiempo, no por repeticiones.' }
   };
+
+  /* ------------------------------------------------------------------ *
+   * 2.b Equipamiento: qué necesita cada ejercicio y qué hay disponible
+   * ------------------------------------------------------------------ */
+  const EQUIPMENT = [
+    { id: 'barra', label: 'Barra y discos', hint: 'Barra olímpica, discos y rack' },
+    { id: 'mancuernas', label: 'Mancuernas', hint: 'Al menos un par ajustable' },
+    { id: 'banco', label: 'Banco', hint: 'Banco ajustable o plano' },
+    { id: 'polea', label: 'Poleas', hint: 'Polea alta, baja o crossover' },
+    { id: 'maquina', label: 'Máquinas', hint: 'Prensa, hack, extensión, curl, abducción…' },
+    { id: 'smith', label: 'Smith', hint: 'Máquina Smith o multipower' },
+    { id: 'trap_bar', label: 'Trap bar', hint: 'Barra hexagonal' },
+    { id: 'peso_corporal', label: 'Peso corporal', hint: 'Siempre disponible: tu cuerpo y el suelo', always: true },
+    { id: 'barra_dominadas', label: 'Barra de dominadas o anillas', hint: 'Para dominadas y remo invertido' },
+    { id: 'accesorio', label: 'Accesorios', hint: 'Bandas, rueda, TRX' }
+  ];
+  const EQUIP_TAG = {
+    'barra': 'barra', 'máquina': 'maquina', 'polea': 'polea', 'mancuernas': 'mancuernas',
+    'trap bar': 'trap_bar', 'peso corporal': 'peso_corporal', 'barra dominadas': 'barra_dominadas', 'accesorio': 'accesorio',
+    'smith': 'smith', 'otro': 'maquina'
+  };
+  /* el banco no está en el campo `equipment` de fábrica: se añade aquí */
+  const EXTRA_REQ = {
+    bench: ['banco'], incline_db: ['banco'], hip_thrust: ['banco'],
+    hip_thrust_smith: ['banco', 'smith'], bridge_bb: ['banco'],
+    back_squat: ['barra'], row_barbell: ['barra'],
+    db_bench: ['banco'], triceps_dip: ['banco'], step_up: ['cajon']
+  };
+
+  function equipId(e) { return EQUIP_TAG[(e && e.equipment) || ''] || 'maquina'; }
+  function requiredEquipment(e) {
+    const base = [equipId(e)].concat(EXTRA_REQ[e.id] || []);
+    return base.filter((v, i) => base.indexOf(v) === i);
+  }
+  function isAvailable(e, equipment) {
+    if (!Array.isArray(equipment)) return true; // sin configurar = todo disponible
+    return requiredEquipment(e).every((t) => t === 'peso_corporal' || equipment.indexOf(t) >= 0);
+  }
+
+  /* Mejor sustituto: mismo patrón, mismo músculo principal, que sí tenga
+     el equipo y que no esté marcado como «no me gusta». */
+  const COMPOUND_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'push_h', 'push_i', 'push_v', 'pull_v', 'pull_h', 'pull_uni'];
+
+  function pickAlternative(exId, opts) {
+    opts = opts || {};
+    const exMap = opts.exMap || getExMap();
+    const src = exOf(exId, exMap);
+    const prefs = opts.prefs || {};
+    const scored = Object.keys(exMap)
+      .filter((id) => id !== exId)
+      .filter((id) => prefs[id] !== 'dislike')
+      .filter((id) => isAvailable(exMap[id], opts.equipment))
+      .map((id) => {
+        const e = exMap[id];
+        let score = 0;
+        if (e.pattern === src.pattern) score += 4;
+        if (e.primary === src.primary) score += 3;
+        if (prefs[id] === 'like') score += 2;
+        if ((opts.used || []).indexOf(id) >= 0) score -= 4;
+        if (e.unilateral === src.unilateral) score += 1;
+        if (equipId(e) === equipId(src)) score += 1;
+        /* un compuesto se sustituye por otro compuesto, no por un aislamiento */
+        if (COMPOUND_PATTERNS.indexOf(e.pattern) >= 0 === (COMPOUND_PATTERNS.indexOf(src.pattern) >= 0)) score += 1;
+        return { id: id, score: score };
+      })
+      .filter((c) => c.score >= 4)
+      .sort((a, b) => (b.score - a.score) || a.id.localeCompare(b.id));
+    return scored.length ? scored[0].id : null;
+  }
+
+  /* Aplica las restricciones del perfil (equipo y gustos) a un programa.
+     Devuelve la lista de cambios para poder explicarlos en la interfaz. */
+  function applyConstraints(program, opts) {
+    opts = opts || {};
+    const exMap = opts.exMap || getExMap();
+    const prefs = opts.prefs || {};
+    const changes = [];
+
+    program.days.forEach((day) => {
+      const used = day.slots.map((slot) => slot.ex);
+      day.slots.forEach((slot) => {
+        const e = exOf(slot.ex, exMap);
+        const disliked = prefs[slot.ex] === 'dislike';
+        const missing = !isAvailable(e, opts.equipment);
+        if (!disliked && !missing) return;
+
+        const others = used.filter((id) => id !== slot.ex);
+        let repeated = false;
+        let alt = pickAlternative(slot.ex, { exMap: exMap, equipment: opts.equipment, prefs: prefs, used: others });
+        if (alt && others.indexOf(alt) >= 0) alt = null;
+
+        /* Sin alternativa limpia: si ya hay un ejercicio igual en la sesión,
+           se quita la serie (mejor sesión corta que repetida); si la sesión
+           se quedaría con menos de 4 ejercicios, se acepta la repetición. */
+        if (!alt) {
+          const any = pickAlternative(slot.ex, { exMap: exMap, equipment: opts.equipment, prefs: prefs });
+          if (any && any !== slot.ex) {
+            repeated = others.indexOf(any) >= 0;
+            if (repeated && day.slots.length > 4) { slot.drop = true; }
+            else alt = any;
+          }
+        }
+
+        if (slot.drop) {
+          changes.push({
+            session: day.name, from: slot.ex, fromName: e.name, to: null, toName: null,
+            reason: 'sin alternativa distinta', needs: requiredEquipment(e)
+          });
+        } else if (alt) {
+          changes.push({
+            session: day.name, from: slot.ex, fromName: e.name,
+            to: alt, toName: exOf(alt, exMap).name,
+            reason: disliked ? 'no te gusta' : missing ? 'no tienes el equipo' : 'ajuste',
+            repeated: repeated
+          });
+          const idx = used.indexOf(slot.ex);
+          if (idx >= 0) used.splice(idx, 1, alt); else used.push(alt);
+          slot.ex = alt;
+        } else {
+          slot.flagged = 'sin-equipo';
+          changes.push({
+            session: day.name, from: slot.ex, fromName: e.name, to: null, toName: null,
+            reason: 'sin alternativa', needs: requiredEquipment(e)
+          });
+        }
+      });
+      if (day.slots.some((s) => s.drop)) day.slots = day.slots.filter((s) => !s.drop);
+    });
+    return changes;
+  }
 
   const EX = {}; // pool + custom, rellenado por getExMap
   function poolEx(id) { return EX_POOL[id]; }
@@ -369,9 +536,9 @@
     return VOLUME_ORDER.map(id => {
       if (id === 'deltoids') {
         const total = (vol.delt_front ? vol.delt_front.total : 0) + (vol.delt_side ? vol.delt_side.total : 0) + (vol.delt_rear ? vol.delt_rear.total : 0);
-        return { id: 'deltoids', label: 'Deltoides', total: round1(total), range: [12, 16], aim: 16 };
+        return { id: 'deltoids', label: 'Deltoides', short: 'Deltoides', total: round1(total), range: [12, 16], aim: 16 };
       }
-      return { id: id, label: MUSCLE_LABEL[id] || id, total: round1(vol[id] ? vol[id].total : 0), range: rangeOf(id), aim: aimOf(id) };
+      return { id: id, label: MUSCLE_LABEL[id] || id, short: (MUSCLES.filter((m) => m.id === id)[0] || {}).short || id, total: round1(vol[id] ? vol[id].total : 0), range: rangeOf(id), aim: aimOf(id) };
     });
   }
 
@@ -381,7 +548,7 @@
       let status = 'ok';
       if (r.total < lo - 0.6) status = 'low';
       if (r.total > hi + 0.6) status = 'high';
-      return { id: r.id, label: r.label, total: r.total, range: r.range, status: status, aim: r.aim };
+      return { id: r.id, label: r.label, short: r.short || r.label, total: r.total, range: r.range, status: status, aim: r.aim };
     });
   }
 
@@ -508,6 +675,7 @@
     const tpl = templateFor(n);
     applyOverrides(tpl, opts.overrides);
     applySwaps(tpl, opts.swaps);
+    applyConstraints(tpl, { exMap: exMap, equipment: opts.equipment, prefs: opts.prefs });
     if (opts.fit !== false) { fitToTarget(tpl, exMap); rebalance(tpl, exMap); }
     if (opts.phase && opts.phase.volume && opts.phase.volume !== 1) applyVolume(tpl, opts.phase.volume);
     return tpl;
@@ -872,6 +1040,47 @@
   }
 
   /* ------------------------------------------------------------------ *
+   * 12.b Estado multiusuario: migración desde el formato de un solo perfil
+   * ------------------------------------------------------------------ */
+  function profileId() {
+    return 'p_' + Math.random().toString(36).slice(2, 9);
+  }
+
+  function normalizeProfile(p) {
+    const base = defaultState();
+    const out = Object.assign({}, base, p || {});
+    out.athlete = Object.assign({}, base.athlete, (p && p.athlete) || {});
+    out.block = Object.assign({}, base.block, (p && p.block) || {});
+    out.loads = (p && p.loads) || {};
+    out.logs = (p && p.logs) || {};
+    out.custom = (p && p.custom) || [];
+    out.measurements = (p && p.measurements) || [];
+    out.swaps = (p && p.swaps) || {};
+    out.prefs = (p && p.prefs) || {};
+    out.equipment = Array.isArray(p && p.equipment) ? p.equipment : EQUIPMENT.map((e) => e.id);
+    out.id = (p && p.id) || profileId();
+    out.name = (p && p.name) || out.athlete.name || 'Atleta';
+    return out;
+  }
+
+  /* Acepta: estado v3, estado v2 de un solo perfil, o nada. */
+  function migrateState(raw) {
+    if (raw && raw.profiles && typeof raw.profiles === 'object' && raw.activeId) {
+      Object.keys(raw.profiles).forEach((k) => { raw.profiles[k] = normalizeProfile(raw.profiles[k]); });
+      if (!raw.profiles[raw.activeId]) raw.activeId = Object.keys(raw.profiles)[0];
+      raw.version = 3;
+      return raw;
+    }
+    if (raw && (raw.athlete || raw.block || raw.logs)) {
+      const prof = normalizeProfile(raw);
+      prof.id = raw.id || profileId();
+      return { version: 3, activeId: prof.id, profiles: { [prof.id]: prof } };
+    }
+    const fresh = normalizeProfile(null);
+    return { version: 3, activeId: fresh.id, profiles: { [fresh.id]: fresh } };
+  }
+
+  /* ------------------------------------------------------------------ *
    * 13. Autopruebas (se ejecutan con ?selftest=1 o desde node)
    * ------------------------------------------------------------------ */
   function selfTest() {
@@ -961,6 +1170,9 @@
     advise: advise, lastEntryFor: lastEntryFor, loadHistory: loadHistory, countChanges: countChanges,
     readiness: readiness, logTonnage: logTonnage, logSets: logSets, logByMuscle: logByMuscle, weeklySummary: weeklySummary,
     defaultState: defaultState, seedLoads: seedLoads, normalizeState: normalizeState,
-    round1: round1, roundTo: roundTo, selfTest: selfTest
+    round1: round1, roundTo: roundTo, selfTest: selfTest,
+    EQUIPMENT: EQUIPMENT, requiredEquipment: requiredEquipment, isAvailable: isAvailable,
+    pickAlternative: pickAlternative, applyConstraints: applyConstraints,
+    migrateState: migrateState, normalizeProfile: normalizeProfile, profileId: profileId
   };
 });

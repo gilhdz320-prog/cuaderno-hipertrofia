@@ -9,10 +9,12 @@
   const $ = (sel, root) => (root || document).querySelector(sel);
   const $$ = (sel, root) => Array.prototype.slice.call((root || document).querySelectorAll(sel));
 
-  const KEY = 'cuaderno.v2';
+  const KEY = 'cuaderno.v3';
+  const KEY_OLD = 'cuaderno.v2';
   const THEME_KEY = 'cuaderno.theme';
 
-  let S = null;          // estado persistente
+  let DB = null;         // todos los perfiles + cuál está activo
+  let S = null;          // perfil activo (atajo: todo el código de vistas usa S)
   let EX = null;         // mapa de ejercicios (pool + propios)
   let P = null;          // programa activo (con fase aplicada)
   let TAB = 'hoy';
@@ -100,17 +102,51 @@
    * estado
    * ------------------------------------------------------------------ */
   function readStore() {
+    /* v3: varios perfiles */
     try {
       const raw = localStorage.getItem(KEY);
-      if (!raw) return null;
-      return JSON.parse(raw);
-    } catch (e) { storageOK = false; return null; }
+      if (raw) return CE.migrateState(JSON.parse(raw));
+    } catch (e) { storageOK = false; }
+    /* v2: un solo perfil → se migra sin perder nada */
+    try {
+      const old = localStorage.getItem(KEY_OLD);
+      if (old) {
+        const migrated = CE.migrateState(JSON.parse(old));
+        try { localStorage.setItem(KEY, JSON.stringify(migrated)); } catch (e2) {}
+        return migrated;
+      }
+    } catch (e) { }
+    return CE.migrateState(null);
   }
   function writeStore() {
-    S.updatedAt = new Date().toISOString();
-    try { localStorage.setItem(KEY, JSON.stringify(S)); storageOK = true; }
+    DB.updatedAt = new Date().toISOString();
+    try { localStorage.setItem(KEY, JSON.stringify(DB)); storageOK = true; }
     catch (e) { storageOK = false; }
     flashSaved();
+  }
+
+  /* ---------- perfiles ---------- */
+  function profileList() { return Object.keys(DB.profiles).map((id) => DB.profiles[id]); }
+  function createProfile(name) {
+    const p = CE.normalizeProfile({ name: name, athlete: { name: name } });
+    p.program = CE.buildProgram({
+      n: p.block.freq, exMap: CE.getExMap(p.custom), loads: p.loads,
+      equipment: p.equipment, prefs: p.prefs, swaps: p.swaps
+    });
+    p.loads = CE.seedLoads(p);
+    DB.profiles[p.id] = p;
+    DB.activeId = p.id;
+    save(true);
+    return p;
+  }
+  function switchProfile(id) {
+    if (!DB.profiles[id]) return;
+    DB.activeId = id;
+    S = DB.profiles[id];
+    save(true);
+    refreshDerived();
+    render();
+    toast('Perfil: ' + (S.name || 'Atleta'));
   }
   let saveT = null;
   function save(now) {
@@ -133,8 +169,9 @@
   }
 
   function refreshDerived() {
+    if (DB && DB.profiles && DB.profiles[DB.activeId]) S = DB.profiles[DB.activeId];
     EX = CE.getExMap(S.custom);
-    const base = S.program && S.program.days ? S.program : CE.buildProgram({ n: S.block.freq, exMap: EX, loads: S.loads, swaps: S.swaps });
+    const base = S.program && S.program.days ? S.program : CE.buildProgram({ n: S.block.freq, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs });
     S.program = base;
     const ph = CE.phaseForWeek(currentWeek());
     P = ph.volume === 1 ? base : CE.applyVolume(JSON.parse(JSON.stringify(base)), ph.volume);
@@ -191,6 +228,10 @@
     }
     const bn = $('#blockName');
     if (bn) bn.textContent = S.block.name;
+    const pn = $('#profileName');
+    if (pn) pn.textContent = S.name || 'Atleta';
+    const av = $('#avatarInitial');
+    if (av) av.textContent = (S.name || 'A').trim().charAt(0);
     $$('.tab').forEach(t => t.setAttribute('aria-selected', t.dataset.tab === TAB ? 'true' : 'false'));
     document.body.dataset.tab = TAB;
   }
@@ -409,6 +450,9 @@
     const title = el('div', { class: 'ex-title' });
     title.appendChild(el('b', {}, ex.name, slot.optional ? el('span', { class: 'pill opt', style: { marginLeft: '8px' }, text: 'opcional' }) : null));
     title.appendChild(el('span', { class: 'spec', text: slot.sets + ' × ' + slot.reps[0] + '–' + slot.reps[1] + ' · RIR ' + slot.rir + ' · ' + fmtRest(slot.rest || ex.rest) + ' descanso' }));
+    if (slot.flagged === 'sin-equipo') {
+      title.appendChild(el('span', { class: 'pill', style: { borderColor: 'var(--amber)', color: 'var(--amber)' }, text: 'necesita ' + CE.requiredEquipment(ex).filter((t) => t !== 'peso_corporal').map((t) => ((CE.EQUIPMENT.filter((e) => e.id === t)[0] || {}).label || t).toLowerCase()).join(' o ') }));
+    }
     if (last) {
       const sets = last.entry.sets.filter(s => s && s.reps);
       const maxLoad = Math.max.apply(null, sets.map(s => s.load || 0).concat([0]));
@@ -884,7 +928,7 @@
 
     const n = PENDING_FREQ || S.block.freq;
     if (n !== S.block.freq) {
-      const cand = CE.buildProgram({ n: n, exMap: EX, loads: S.loads, swaps: S.swaps });
+      const cand = CE.buildProgram({ n: n, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs });
       const diff = CE.diffPrograms(S.program, cand, EX, S.loads);
       card.appendChild(el('hr', { class: 'sep' }));
       card.appendChild(el('h3', { text: 'Pasar a ' + n + ' días: esto es lo que cambia' }));
@@ -943,7 +987,7 @@
   }
 
   function applyFrequency(n) {
-    const cand = CE.buildProgram({ n: n, exMap: EX, loads: S.loads, swaps: S.swaps });
+    const cand = CE.buildProgram({ n: n, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs });
     S.program = cand;
     S.block.freq = n;
     PENDING_FREQ = null;
@@ -965,7 +1009,7 @@
     head.appendChild(hl);
     head.appendChild(el('div', { class: 'row tight' },
       el('button', { class: 'btn sm', text: 'Optimizar reparto', onclick: optimize }),
-      el('button', { class: 'btn sm ghost', text: 'Ajustes', onclick: openSettings })
+      el('button', { class: 'btn sm ghost', text: 'Ajustes', onclick: () => go('ajustes') })
     ));
     wrap.appendChild(head);
 
@@ -1016,6 +1060,8 @@
     const byPattern = {};
     Object.keys(EX).forEach(id => {
       const e = EX[id];
+      const disponible = CE.isAvailable(e, S.equipment) || id === slot.ex;
+      if (!disponible) return; // no ofrecer lo que no puede hacer
       byPattern[e.pattern] = byPattern[e.pattern] || [];
       byPattern[e.pattern].push({ id: id, name: e.name });
     });
@@ -1046,6 +1092,11 @@
 
     row.appendChild(el('input', { type: 'number', min: '0', step: '15', value: slot.rest || ex.rest, 'aria-label': 'descanso en segundos', title: 'descanso en segundos', onchange: (ev) => { slot.rest = num(ev.target.value); save(); render(); } }));
 
+    if (slot.flagged === 'sin-equipo') {
+      row.appendChild(el('div', { class: 'row', style: { gridColumn: '1 / -1', marginTop: '2px' } },
+        el('span', { class: 'pill', style: { borderColor: 'var(--amber)', color: 'var(--amber)' }, text: 'no tienes el material: ' + CE.requiredEquipment(ex).filter((t) => t !== 'peso_corporal').map((t) => ((CE.EQUIPMENT.filter((e) => e.id === t)[0] || {}).label || t).toLowerCase()).join(' o ') })
+      ));
+    }
     const tools = el('div', { class: 'row tight', style: { gap: '2px' } });
     tools.appendChild(el('button', { class: 'btn icon ghost', text: '↑', title: 'subir', disabled: si === 0, onclick: () => { swapSlots(day, si, si - 1); } }));
     tools.appendChild(el('button', { class: 'btn icon ghost', text: '↓', title: 'bajar', disabled: si === day.slots.length - 1, onclick: () => { swapSlots(day, si, si + 1); } }));
@@ -1150,51 +1201,6 @@
           });
           EX = CE.getExMap(S.custom);
           save(); closeSheet(); render(); toast('Ejercicio creado');
-        }
-      }
-    ]);
-  }
-
-  function openSettings() {
-    const b = S.block, a = S.athlete;
-    const name = el('input', { type: 'text', value: b.name });
-    const start = el('input', { type: 'date', value: b.start });
-    const weeks = el('input', { type: 'number', min: '4', max: '24', value: b.weeks });
-    const weight = el('input', { type: 'number', step: '0.1', value: a.weightKg });
-    const kcal = el('input', { type: 'number', step: '10', value: a.kcal });
-    const pmin = el('input', { type: 'number', step: '0.1', value: a.proteinMin });
-    const pmax = el('input', { type: 'number', step: '0.1', value: a.proteinMax });
-    const body = el('div', { class: 'stack' },
-      el('label', { class: 'fld' }, 'Nombre del bloque', name),
-      el('div', { class: 'grid two' },
-        el('label', { class: 'fld' }, 'Primer lunes', start),
-        el('label', { class: 'fld' }, 'Semanas', weeks)
-      ),
-      el('div', { class: 'grid two' },
-        el('label', { class: 'fld' }, 'Peso corporal (kg)', weight),
-        el('label', { class: 'fld' }, 'Calorías diarias', kcal)
-      ),
-      el('div', { class: 'grid two' },
-        el('label', { class: 'fld' }, 'Proteína mín. (g/kg)', pmin),
-        el('label', { class: 'fld' }, 'Proteína máx. (g/kg)', pmax)
-      ),
-      el('div', { class: 'banner' },
-        el('b', { text: 'Proteína objetivo: ' + Math.round(a.proteinMin * a.weightKg) + '–' + Math.round(a.proteinMax * a.weightKg) + ' g/día. ' }),
-        el('span', { text: 'A ' + a.kcal + ' kcal es la variable que decide si el bloque conserva masa.' })
-      )
-    );
-    openSheet('Ajustes del bloque', null, body, [
-      { label: 'Cancelar', ghost: true, onClick: closeSheet },
-      {
-        label: 'Guardar', primary: true, onClick: () => {
-          b.name = name.value || b.name;
-          b.start = start.value || b.start;
-          b.weeks = Math.max(4, num(weeks.value) || 12);
-          a.weightKg = num(weight.value) || a.weightKg;
-          a.kcal = num(kcal.value) || a.kcal;
-          a.proteinMin = num(pmin.value) || a.proteinMin;
-          a.proteinMax = num(pmax.value) || a.proteinMax;
-          save(true); closeSheet(); render(); toast('Ajustes guardados');
         }
       }
     ]);
@@ -1367,8 +1373,9 @@
   }
 
   function exportJSON() {
-    download('cuaderno-copia-' + todayISO() + '.json', JSON.stringify(S, null, 2), 'application/json');
-    toast('Copia descargada');
+    /* nunca se exporta la clave de OpenAI */
+    download('cuaderno-copia-' + todayISO() + '.json', JSON.stringify(DB, null, 2), 'application/json');
+    toast('Copia de ' + profileList().length + ' perfil(es) descargada');
   }
 
   /* ------------------------------------------------------------------ *
@@ -1505,18 +1512,481 @@
     reader.onload = () => {
       try {
         const obj = JSON.parse(String(reader.result));
-        S = CE.normalizeState(obj);
-        if (!S.program || !S.program.days) S.program = CE.buildProgram({ n: S.block.freq, exMap: CE.getExMap(S.custom), loads: S.loads, swaps: S.swaps });
-        save(true); render(); toast('Copia importada');
+        DB = CE.migrateState(obj);
+        S = DB.profiles[DB.activeId];
+        if (!S.program || !S.program.days) {
+          S.program = CE.buildProgram({ n: S.block.freq, exMap: CE.getExMap(S.custom), loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps });
+        }
+        save(true); refreshDerived(); render(); toast('Copia importada: ' + profileList().length + ' perfil(es)');
       } catch (e) { toast('Ese archivo no es una copia válida'); }
     };
     reader.readAsText(file);
   }
 
-  function confirmReset() {
-    openSheet('Empezar de cero', 'Se borran tus registros, cargas y medidas de este navegador. Descarga antes una copia si la quieres conservar.', el('div', {}), [
+  /* ------------------------------------------------------------------ *
+   * PERFILES
+   * ------------------------------------------------------------------ */
+  function promptText(title, sub, value, onOk) {
+    const input = el('input', { type: 'text', value: value || '', placeholder: 'Nombre' });
+    openSheet(title, sub, el('div', { class: 'stack' }, el('label', { class: 'fld' }, 'Nombre', input)), [
       { label: 'Cancelar', ghost: true, onClick: closeSheet },
-      { label: 'Borrar todo', primary: true, onClick: () => { try { localStorage.removeItem(KEY); } catch (e) {} location.reload(); } }
+      { label: 'Guardar', primary: true, onClick: () => { const v = input.value.trim(); if (v) onOk(v); } }
+    ]);
+    setTimeout(() => { input.focus(); input.select(); }, 60);
+  }
+
+  function openProfiles() {
+    const body = el('div', { class: 'stack' });
+    const list = profileList();
+    list.forEach((p) => {
+      const active = p.id === DB.activeId;
+      const sessions = Object.keys(p.logs || {}).length;
+      body.appendChild(el('div', { class: 'row between', style: { padding: '10px 0', borderBottom: '1px solid var(--line)' } },
+        el('div', {},
+          el('b', { text: p.name || 'Atleta' }),
+          el('div', { class: 'tiny muted', text: sessions + ' sesiones registradas · ' + (p.equipment ? p.equipment.length : 0) + ' equipos' + (p.block ? ' · ' + p.block.freq + ' días' : '') })
+        ),
+        el('div', { class: 'row tight' },
+          active ? el('span', { class: 'chip', text: 'activo' }) : el('button', { class: 'btn sm', text: 'usar', onclick: () => { switchProfile(p.id); closeSheet(); } }),
+          el('button', {
+            class: 'btn sm ghost', text: 'renombrar',
+            onclick: () => promptText('Renombrar perfil', null, p.name, (v) => { p.name = v; p.athlete.name = v; save(true); closeSheet(); render(); })
+          }),
+          list.length > 1 ? el('button', {
+            class: 'btn sm ghost', text: 'borrar',
+            onclick: () => {
+              openSheet('Borrar «' + (p.name || 'Atleta') + '»', 'Se eliminan sus cargas, su programa y sus ' + sessions + ' sesiones. No se puede deshacer.', el('div', {}), [
+                { label: 'Cancelar', ghost: true, onClick: closeSheet },
+                {
+                  label: 'Borrar perfil', primary: true, onClick: () => {
+                    delete DB.profiles[p.id];
+                    if (DB.activeId === p.id) DB.activeId = Object.keys(DB.profiles)[0];
+                    S = DB.profiles[DB.activeId];
+                    save(true); refreshDerived(); closeSheet(); render();
+                    toast('Perfil borrado');
+                  }
+                }
+              ]);
+            }
+          }) : null
+        )
+      ));
+    });
+    body.appendChild(el('button', {
+      class: 'btn wide', style: { marginTop: '10px' }, text: '+ Nuevo perfil',
+      onclick: () => promptText('Nuevo perfil', 'Tendrá su propio programa, sus cargas y sus registros.', '', (v) => {
+        const p = createProfile(v);
+        closeSheet(); refreshDerived(); render();
+        toast('Perfil «' + p.name + '» creado');
+      })
+    }));
+    openSheet('Perfiles', 'Cada persona guarda sus cargas, su programa y sus registros por separado, en este dispositivo.', body, [{ label: 'Cerrar', ghost: true, onClick: closeSheet }]);
+  }
+
+  /* ------------------------------------------------------------------ *
+   * AJUSTES
+   * ------------------------------------------------------------------ */
+  let AI_RESULT = null;
+  let AI_BUSY = false;
+  let AI_PROMPT = '';
+
+  function viewSettings() {
+    const wrap = el('div', { class: 'stack' });
+    const head = el('div', { class: 'view-head' });
+    const hl = el('div', {});
+    hl.appendChild(el('div', { class: 'kicker', text: 'Tu cuenta' }));
+    hl.appendChild(el('h1', { text: 'Ajustes' }));
+    hl.appendChild(el('p', { text: 'Perfil, material disponible, ejercicios que no quieres y el asistente. Todo lo de aquí cambia el programa solo.' }));
+    head.appendChild(hl);
+    head.appendChild(el('button', { class: 'btn sm', text: 'Cambiar de perfil', onclick: openProfiles }));
+    wrap.appendChild(head);
+
+    wrap.appendChild(profileCard());
+    wrap.appendChild(equipmentCard());
+    wrap.appendChild(prefsCard());
+    wrap.appendChild(aiCard());
+    wrap.appendChild(dataCard());
+    return wrap;
+  }
+
+  function profileCard() {
+    const card = el('div', { class: 'card' });
+    card.appendChild(el('div', { class: 'card-title' }, el('h2', { text: 'Perfil' }), el('span', { class: 'meta', text: 'solo este dispositivo' })));
+    const name = el('input', { type: 'text', value: S.name || '' });
+    const weight = el('input', { type: 'number', step: '0.1', value: S.athlete.weightKg });
+    const kcal = el('input', { type: 'number', step: '10', value: S.athlete.kcal });
+    const pmin = el('input', { type: 'number', step: '0.1', value: S.athlete.proteinMin });
+    const pmax = el('input', { type: 'number', step: '0.1', value: S.athlete.proteinMax });
+    const start = el('input', { type: 'date', value: S.block.start });
+    const weeks = el('input', { type: 'number', min: '4', max: '24', value: S.block.weeks });
+
+    card.appendChild(el('div', { class: 'grid two' },
+      el('label', { class: 'fld' }, 'Nombre', name),
+      el('label', { class: 'fld' }, 'Peso corporal (kg)', weight),
+      el('label', { class: 'fld' }, 'Calorías diarias', kcal),
+      el('label', { class: 'fld' }, 'Proteína mín. (g/kg)', pmin),
+      el('label', { class: 'fld' }, 'Proteína máx. (g/kg)', pmax),
+      el('label', { class: 'fld' }, 'Primer lunes', start),
+      el('label', { class: 'fld' }, 'Semanas del bloque', weeks)
+    ));
+    card.appendChild(el('div', { class: 'row', style: { marginTop: '12px' } },
+      el('button', {
+        class: 'btn primary', text: 'Guardar',
+        onclick: () => {
+          S.name = name.value.trim() || S.name;
+          S.athlete.name = S.name;
+          S.athlete.weightKg = num(weight.value) || S.athlete.weightKg;
+          S.athlete.kcal = num(kcal.value) || S.athlete.kcal;
+          S.athlete.proteinMin = num(pmin.value) || S.athlete.proteinMin;
+          S.athlete.proteinMax = num(pmax.value) || S.athlete.proteinMax;
+          S.block.start = start.value || S.block.start;
+          S.block.weeks = Math.max(4, num(weeks.value) || 12);
+          save(true); render(); toast('Perfil guardado');
+        }
+      }),
+      el('span', { class: 'tiny muted', text: 'Proteína objetivo: ' + Math.round(S.athlete.proteinMin * S.athlete.weightKg) + '–' + Math.round(S.athlete.proteinMax * S.athlete.weightKg) + ' g/día' })
+    ));
+    return card;
+  }
+
+  function equipmentCard() {
+    const card = el('div', { class: 'card' });
+    card.appendChild(el('div', { class: 'card-title' },
+      el('h2', { text: 'Material disponible' }),
+      el('span', { class: 'meta', text: S.equipment.length + ' de ' + CE.EQUIPMENT.length })
+    ));
+    card.appendChild(el('p', { class: 'hint', text: 'Desmarca lo que no tengas: el programa cambia esos ejercicios por variantes que sí puedes hacer, sin tocar tus series ni tus repeticiones. El peso corporal siempre cuenta.' }));
+    const grid = el('div', { class: 'equip-grid' });
+    CE.EQUIPMENT.forEach((item) => {
+      const on = item.always || S.equipment.indexOf(item.id) >= 0;
+      const box = el('input', { type: 'checkbox', checked: on ? true : null, disabled: item.always ? true : null });
+      const lab = el('label', { class: 'equip' + (on ? '' : ' off') + (item.always ? ' always' : '') },
+        box,
+        el('span', {}, el('b', { text: item.label }), el('span', { text: item.hint || '' }))
+      );
+      box.addEventListener('change', () => {
+        let eq = S.equipment.slice();
+        if (box.checked) { if (eq.indexOf(item.id) < 0) eq.push(item.id); }
+        else eq = eq.filter((id) => id !== item.id);
+        S.equipment = eq;
+        /* en sitio: conserva tus series, reps y ejercicios elegidos */
+        const changes = CE.applyConstraints(S.program, { exMap: EX, equipment: S.equipment, prefs: S.prefs });
+        save(true); render();
+        const replaced = changes.filter((c) => c.to).length;
+        toast(replaced ? 'Cambiados ' + replaced + ' ejercicios por falta de material' : 'Material actualizado');
+      });
+      grid.appendChild(lab);
+    });
+    card.appendChild(grid);
+    card.appendChild(el('div', { class: 'row', style: { marginTop: '12px' } },
+      el('button', {
+        class: 'btn sm ghost', text: 'Reconstruir desde la plantilla',
+        onclick: () => {
+          S.program = CE.buildProgram({ n: S.block.freq, exMap: EX, loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps });
+          save(true); render();
+          toast('Programa reconstruido con tu material y tus gustos');
+        }
+      }),
+      el('span', { class: 'tiny muted', text: 'vuelve al reparto original del bloque' })
+    ));
+    return card;
+  }
+
+  function prefsCard() {
+    const seen = {};
+    const rows = [];
+    S.program.days.forEach((d) => d.slots.forEach((sl) => { if (!seen[sl.ex]) { seen[sl.ex] = 1; rows.push(sl.ex); } }));
+    const card = el('div', { class: 'card' });
+    card.appendChild(el('div', { class: 'card-title' }, el('h2', { text: 'Ejercicios que no quieres' }), el('span', { class: 'meta', text: rows.length + ' ejercicios' })));
+    card.appendChild(el('p', { class: 'hint', text: 'Marca «no» y el motor busca el mejor sustituto con tu material. Marca «sí» y lo prefiere cuando hay empate.' }));
+    const list = el('div', { class: 'pref-list' });
+    rows.forEach((exId) => {
+      const e = CE.exOf(exId, EX);
+      const pref = S.prefs[exId] || 'neutral';
+      const sg = el('div', { class: 'sg' });
+      [['like', 'sí'], ['neutral', 'igual'], ['dislike', 'no']].forEach(([val, label]) => {
+        sg.appendChild(el('button', {
+          type: 'button', text: label, class: val === 'dislike' ? 'no' : '',
+          'aria-pressed': pref === val ? 'true' : 'false',
+          onclick: () => setPreference(exId, val)
+        }));
+      });
+      list.appendChild(el('div', { class: 'pref-row' },
+        el('div', { class: 'nm' }, e.name),
+        sg
+      ));
+    });
+    card.appendChild(list);
+    return card;
+  }
+
+  function setPreference(exId, value) {
+    if (value === 'neutral') delete S.prefs[exId];
+    else S.prefs[exId] = value;
+    let msg = 'Preferencia guardada';
+    if (value === 'dislike') {
+      const before = S.program.days.reduce((n, d) => n + d.slots.filter((s) => s.ex === exId).length, 0);
+      const changes = CE.applyConstraints(S.program, { exMap: EX, equipment: S.equipment, prefs: S.prefs });
+      const replaced = changes.filter((c) => c.to && c.from === exId);
+      if (replaced.length) msg = 'Cambiado por «' + replaced[0].toName + '»';
+      else if (before) msg = 'No hay sustituto mejor; se queda por ahora';
+    }
+    save(true); render();
+    toast(msg);
+  }
+
+  function dataCard() {
+    const card = el('div', { class: 'card' });
+    card.appendChild(el('div', { class: 'card-title' }, el('h2', { text: 'Datos' }), el('span', { class: 'meta', text: profileList().length === 1 ? '1 perfil' : profileList().length + ' perfiles' })));
+    card.appendChild(el('p', { class: 'hint', text: 'Todo vive en este navegador. La copia .json incluye todos los perfiles; la clave de OpenAI nunca se exporta.' }));
+    card.appendChild(el('div', { class: 'row', style: { marginTop: '8px' } },
+      el('button', { class: 'btn sm', text: 'Descargar .json', onclick: exportJSON }),
+      el('button', { class: 'btn sm', text: 'Exportar CSV', onclick: exportCSV }),
+      el('label', { class: 'btn sm', text: 'Importar .json' },
+        el('input', { type: 'file', accept: '.json,application/json', class: 'hidden', onchange: (ev) => importJSON(ev.target.files[0]) })
+      ),
+      el('button', { class: 'btn sm ghost', text: 'Borrar todo', onclick: confirmReset })
+    ));
+    return card;
+  }
+
+  /* ------------------------------------------------------------------ *
+   * IA (OpenAI) — la clave es tuya y se queda en este navegador
+   * ------------------------------------------------------------------ */
+  const AI_KEY_LS = 'cuaderno.aikey';
+  const AI_MODEL_LS = 'cuaderno.aimodel';
+  const AI_MODELS = [
+    ['gpt-4o-mini', 'gpt-4o-mini · rápido y barato'],
+    ['gpt-4o', 'gpt-4o · mejor criterio'],
+    ['gpt-4.1-mini', 'gpt-4.1-mini · equilibrado']
+  ];
+
+  function aiKey() { try { return localStorage.getItem(AI_KEY_LS) || ''; } catch (e) { return ''; } }
+  function aiModel() { try { return localStorage.getItem(AI_MODEL_LS) || 'gpt-4o-mini'; } catch (e) { return 'gpt-4o-mini'; } }
+
+  async function aiChat(messages, opts) {
+    opts = opts || {};
+    const key = aiKey();
+    if (!key) throw new Error('Falta la clave. Pégala arriba y guarda.');
+    const body = { model: aiModel(), messages: messages, temperature: opts.temperature == null ? 0.4 : opts.temperature };
+    if (opts.json) body.response_format = { type: 'json_object' };
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) {
+      let detail = res.status + ' ' + res.statusText;
+      try { const j = await res.json(); if (j.error && j.error.message) detail = j.error.message; } catch (e) {}
+      throw new Error(detail);
+    }
+    const data = await res.json();
+    return (data.choices && data.choices[0] && data.choices[0].message.content) || '';
+  }
+
+  function aiCatalog() {
+    return Object.keys(EX)
+      .filter((id) => CE.isAvailable(EX[id], S.equipment) && S.prefs[id] !== 'dislike')
+      .map((id) => id + ' = ' + EX[id].name + ' [' + (CE.MUSCLE_LABEL[EX[id].primary] || '') + ', ' + EX[id].pattern + ']')
+      .join('\n');
+  }
+
+  function programSummary() {
+    return S.program.days.map((d) => d.name + ' (' + CE.weekdayName(d.weekday) + '): ' +
+      d.slots.map((s) => (EX[s.ex] ? EX[s.ex].name : s.ex) + ' ' + s.sets + 'x' + s.reps[0] + '-' + s.reps[1] + ' RIR' + s.rir).join('; ')).join('\n');
+  }
+
+  function weekdaysFor(n) {
+    const map = { 1: [1], 2: [1, 4], 3: [1, 3, 5], 4: [1, 2, 4, 5], 5: [1, 2, 3, 4, 5], 6: [1, 2, 3, 4, 5, 6] };
+    return map[Math.max(1, Math.min(6, n))] || [1, 2, 4, 5];
+  }
+
+  async function aiDesignWeek() {
+    const text = (($('#aiPrompt') && $('#aiPrompt').value) || AI_PROMPT || '').trim();
+    AI_PROMPT = text;
+    AI_BUSY = true; AI_RESULT = null; render();
+    try {
+      const system = [
+        'Eres entrenador de hipertrofia. Diseñas una semana de entrenamiento en déficit calórico.',
+        'Respondes SOLO con un objeto JSON válido, sin markdown ni texto fuera del JSON, con esta forma:',
+        '{"notes":"una frase explicando la decisión","frequency":2-6,"days":[{"name":"...","focus":"...","exercises":[{"id":"...","sets":2-5,"reps":[min,max],"rir":0-4,"rest":30-300}]}]}',
+        'Reglas: usa solo ids del catálogo; 4-6 ejercicios por sesión; 12-20 series por sesión;',
+        'no repitas el mismo ejercicio dos veces en una sesión; si hay 3 o más días, el glúteo aparece al menos dos veces;',
+        'en déficit el RIR objetivo es 1-2 en básicos; respeta el material disponible.',
+        'Catálogo (id = nombre [músculo, patrón]):',
+        aiCatalog()
+      ].join('\n');
+      const user = [
+        'Perfil: ' + Math.round(S.athlete.weightKg) + ' kg, ' + S.athlete.kcal + ' kcal, déficit calórico, proteína ' + Math.round(S.athlete.proteinMin * S.athlete.weightKg) + '-' + Math.round(S.athlete.proteinMax * S.athlete.weightKg) + ' g.',
+        'Días que entrena: ' + S.block.freq,
+        'Material: ' + (S.equipment.map((id) => (CE.EQUIPMENT.filter((e) => e.id === id)[0] || {}).label || id).join(', ') || 'solo peso corporal'),
+        'Programa actual:', programSummary(),
+        'Petición: ' + (text || 'Reajusta la semana para que sea eficiente con lo que tengo.')
+      ].join('\n');
+      const raw = await aiChat([{ role: 'system', content: system }, { role: 'user', content: user }], { json: true, temperature: 0.3 });
+      const clean = String(raw).replace(/```json/gi, '').replace(/```/g, '').trim();
+      const plan = JSON.parse(clean);
+      AI_RESULT = applyAIPlan(plan);
+    } catch (e) {
+      AI_RESULT = { kind: 'error', text: e.message || String(e) };
+    }
+    AI_BUSY = false; render();
+  }
+
+  function applyAIPlan(plan) {
+    const dropped = [];
+    const days = (plan.days || []).slice(0, 6);
+    const built = [];
+    days.forEach((d, i) => {
+      const slots = [];
+      (d.exercises || []).forEach((ex) => {
+        const id = String(ex.id || '').trim();
+        if (!EX[id]) { dropped.push((ex.id || '?') + ' (no existe)'); return; }
+        if (!CE.isAvailable(EX[id], S.equipment)) { dropped.push(EX[id].name + ' (sin material)'); return; }
+        if (S.prefs[id] === 'dislike') { dropped.push(EX[id].name + ' (no te gusta)'); return; }
+        const sets = Math.max(1, Math.min(6, Math.round(num(ex.sets) || 3)));
+        let reps = Array.isArray(ex.reps) ? [Math.max(1, Math.min(30, Math.round(num(ex.reps[0]) || 8))), Math.max(1, Math.min(30, Math.round(num(ex.reps[1]) || 10)))] : [8, 10];
+        if (reps[1] < reps[0]) reps = [reps[0], reps[0]];
+        slots.push({
+          ex: id, sets: sets, reps: reps,
+          rir: Math.max(0, Math.min(4, num(ex.rir) === 0 ? 0 : (num(ex.rir) || 2))),
+          rest: Math.max(30, Math.min(300, Math.round(num(ex.rest) || 90)))
+        });
+      });
+      if (slots.length) {
+        built.push({ id: 'ai_' + (i + 1), kind: 'ai_' + (i + 1), name: d.name || ('Sesión ' + (i + 1)), focus: d.focus || '', weekday: 1, slots: slots });
+      }
+    });
+    if (!built.length) {
+      return { kind: 'error', text: 'La propuesta no tenía ejercicios válidos con tu material. Prueba a describir mejor los días o el equipo.' };
+    }
+    const wd = weekdaysFor(built.length);
+    built.forEach((d, i) => { d.weekday = wd[i] || (i + 1); });
+    const program = { n: built.length, label: built.length + ' días · propuesta IA', note: plan.notes || '', days: built };
+    if (CE.countSets(program) > 76) CE.fitToTarget(program, EX);
+    S.program = program;
+    S.block.freq = built.length;
+    save(true);
+    return {
+      kind: 'plan', notes: plan.notes || '', dropped: dropped,
+      days: built.map((d) => ({ name: d.name, focus: d.focus, weekday: d.weekday, slots: d.slots.length })),
+      sets: CE.countSets(program),
+      tonnage: CE.programStats(program, S.loads, EX).tonnage
+    };
+  }
+
+  async function aiReview() {
+    AI_BUSY = true; AI_RESULT = null; render();
+    try {
+      const weeks = CE.weeklySummary(S, EX).slice(-4);
+      const vol = CE.volumeRows(CE.volumeOf(S.program, EX));
+      const payload = {
+        perfil: Math.round(S.athlete.weightKg) + ' kg, ' + S.athlete.kcal + ' kcal, déficit',
+        dias: S.block.freq,
+        material: S.equipment,
+        programas: programSummary(),
+        volumen_por_musculo: vol.map((r) => ({ musculo: r.label, series: r.total, rango: r.range })),
+        semanas: weeks.map((w) => ({ semana: CE.weekNumber(S.block.start, w.weekStart), series: w.sets, tonelaje: w.tonnage, preparacion: w.avgReadiness }))
+      };
+      const raw = await aiChat([
+        { role: 'system', content: 'Eres entrenador de hipertrofia en déficit calórico. Responde en español, en 6 a 10 líneas, concreto y sin rodeos: qué está funcionando, qué ajustarías esta semana y qué vigilar. Sin listas largas ni disclaimers.' },
+        { role: 'user', content: JSON.stringify(payload) }
+      ], { temperature: 0.5 });
+      AI_RESULT = { kind: 'text', title: 'Revisión del bloque', text: raw.trim() };
+    } catch (e) {
+      AI_RESULT = { kind: 'error', text: e.message || String(e) };
+    }
+    AI_BUSY = false; render();
+  }
+
+  async function aiTest() {
+    AI_BUSY = true; AI_RESULT = null; render();
+    try {
+      const raw = await aiChat([{ role: 'user', content: 'Responde solo: conexión correcta' }], { temperature: 0 });
+      AI_RESULT = { kind: 'text', title: 'Conexión', text: raw.trim() };
+    } catch (e) {
+      AI_RESULT = { kind: 'error', text: e.message || String(e) };
+    }
+    AI_BUSY = false; render();
+  }
+
+  function aiCard() {
+    const card = el('div', { class: 'card' });
+    const hasKey = !!aiKey();
+    card.appendChild(el('div', { class: 'card-title' },
+      el('h2', { text: 'Asistente' }),
+      el('span', { class: 'chip ' + (hasKey ? 'green' : ''), text: hasKey ? 'conectado' : 'sin clave' })
+    ));
+    card.appendChild(el('p', { class: 'hint', text: 'Propone programas y revisa tu progreso. La clave es tuya, se guarda solo en este navegador y las llamadas van directas a OpenAI; nunca pasa por un servidor nuestro.' }));
+
+    const key = el('input', { type: 'password', placeholder: 'sk-...', value: hasKey ? '••••••••••••' : '', autocomplete: 'off' });
+    const model = el('select');
+    AI_MODELS.forEach(([id, label]) => model.appendChild(el('option', { value: id, text: label, selected: aiModel() === id ? true : null })));
+    card.appendChild(el('div', { class: 'grid two' },
+      el('label', { class: 'fld' }, 'Clave de OpenAI', key),
+      el('label', { class: 'fld' }, 'Modelo', model)
+    ));
+    card.appendChild(el('div', { class: 'row', style: { marginTop: '10px' } },
+      el('button', {
+        class: 'btn sm', text: 'Guardar clave',
+        onclick: () => {
+          const v = key.value.trim();
+          if (!v || /^•+$/.test(v)) { toast('Escribe la clave completa'); return; }
+          try { localStorage.setItem(AI_KEY_LS, v); localStorage.setItem(AI_MODEL_LS, model.value); } catch (e) {}
+          render(); toast('Clave guardada en este navegador');
+        }
+      }),
+      el('button', { class: 'btn sm ghost', text: 'Probar', disabled: AI_BUSY || !hasKey, onclick: aiTest }),
+      hasKey ? el('button', {
+        class: 'btn sm ghost', text: 'olvidar',
+        onclick: () => { try { localStorage.removeItem(AI_KEY_LS); } catch (e) {} render(); toast('Clave borrada'); }
+      }) : null
+    ));
+    if (!hasKey) {
+      card.appendChild(el('p', { class: 'ai-warn', style: { marginTop: '8px' }, text: 'Créala en platform.openai.com → API keys. Recomendado: una clave solo para esto y con límite de gasto mensual.' }));
+    }
+
+    card.appendChild(el('hr', { class: 'sep' }));
+    const ta = el('textarea', { id: 'aiPrompt', placeholder: 'Ej.: 3 días, tengo barra, mancuernas y banco. No me gusta la sentadilla búlgara. Quiero prioridad glúteo y hombro, y que las sesiones no pasen de 60 minutos.' });
+    ta.value = AI_PROMPT;
+    ta.addEventListener('input', () => { AI_PROMPT = ta.value; });
+    card.appendChild(el('label', { class: 'fld' }, 'Qué quieres cambiar', ta));
+    card.appendChild(el('div', { class: 'ai-actions', style: { marginTop: '10px' } },
+      el('button', { class: 'btn primary', text: AI_BUSY ? 'Pensando…' : 'Diseñar mi semana', disabled: (AI_BUSY || !hasKey) ? true : null, onclick: aiDesignWeek }),
+      el('button', { class: 'btn', text: 'Revisar mi progreso', disabled: (AI_BUSY || !hasKey) ? true : null, onclick: aiReview })
+    ));
+
+    if (AI_RESULT) card.appendChild(renderAIResult(AI_RESULT));
+    return card;
+  }
+
+  function renderAIResult(r) {
+    const box = el('div', { class: 'ai-out', style: { marginTop: '12px' } });
+    if (r.kind === 'error') {
+      box.appendChild(el('b', { class: 'red', text: 'No se pudo completar. ' }));
+      box.appendChild(document.createTextNode(r.text));
+      box.appendChild(el('div', { class: 'tiny muted', style: { marginTop: '6px' }, text: 'Si es un error de clave o de cuota, revísala en platform.openai.com. Si es un bloqueo del navegador, prueba desde la app instalada.' }));
+      return box;
+    }
+    if (r.kind === 'text') {
+      box.appendChild(el('h3', { text: r.title }));
+      box.appendChild(document.createTextNode(r.text));
+      return box;
+    }
+    box.appendChild(el('h3', { text: 'Semana propuesta · ' + r.days.length + ' días · ' + r.sets + ' series' }));
+    if (r.notes) box.appendChild(el('div', { style: { marginBottom: '8px' } }, el('i', { text: r.notes })));
+    r.days.forEach((d) => box.appendChild(el('div', { class: 'tiny', text: CE.weekdayName(d.weekday) + ' · ' + d.name + ' — ' + d.slots + ' ejercicios' })));
+    if (r.dropped && r.dropped.length) {
+      box.appendChild(el('div', { class: 'tiny amber', style: { marginTop: '8px' }, text: 'Descartado: ' + r.dropped.join(', ') }));
+    }
+    box.appendChild(el('div', { class: 'tiny muted', style: { marginTop: '8px' }, text: 'Tonelaje previsto ' + tn(r.tonnage) + '. Aplicado al programa; revísalo en la pestaña Programa.' }));
+    return box;
+  }
+
+  function confirmReset() {
+    openSheet('Borrar todo', 'Se borran todos los perfiles, sus registros y sus cargas de este navegador. Descarga antes una copia si la quieres conservar.', el('div', {}), [
+      { label: 'Cancelar', ghost: true, onClick: closeSheet },
+      { label: 'Borrar todo', primary: true, onClick: () => { try { localStorage.removeItem(KEY); localStorage.removeItem(KEY_OLD); } catch (e) {} location.reload(); } }
     ]);
   }
 
@@ -1538,6 +2008,7 @@
     if (tab === 'semana') return viewWeek();
     if (tab === 'programa') return viewProgram();
     if (tab === 'progreso') return viewProgress();
+    if (tab === 'ajustes') return viewSettings();
     if (tab === 'bloque') return viewDoc();
     return viewToday();
   }
@@ -1609,9 +2080,11 @@
    * arranque
    * ------------------------------------------------------------------ */
   function init() {
-    const stored = readStore();
-    S = stored ? CE.normalizeState(stored) : CE.defaultState();
-    if (!S.program || !S.program.days) S.program = CE.buildProgram({ n: S.block.freq, exMap: CE.getExMap(S.custom), loads: S.loads, swaps: S.swaps });
+    DB = readStore();
+    S = DB.profiles[DB.activeId];
+    if (!S.program || !S.program.days) {
+      S.program = CE.buildProgram({ n: S.block.freq, exMap: CE.getExMap(S.custom), loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs });
+    }
     if (!S.loads || !Object.keys(S.loads).length) S.loads = CE.seedLoads(S);
     refreshDerived();
 
@@ -1621,6 +2094,9 @@
 
     /* pestañas */
     $$('.tab').forEach(t => t.addEventListener('click', () => go(t.dataset.tab)));
+
+    const pbtn = $('#profileBtn');
+    if (pbtn) pbtn.addEventListener('click', openProfiles);
 
     const themeBtn = $('#themeBtn');
     if (themeBtn) themeBtn.addEventListener('click', () => {
@@ -1642,11 +2118,11 @@
 
     /* enlace directo a una pestaña: #semana, #programa… */
     const hash = (location.hash || '').replace('#', '');
-    if (['hoy', 'semana', 'programa', 'progreso', 'bloque'].indexOf(hash) >= 0) TAB = hash;
+    if (['hoy', 'semana', 'programa', 'progreso', 'ajustes', 'bloque'].indexOf(hash) >= 0) TAB = hash;
 
     setupPWA();
 
-    if (!stored) { save(true); }
+    save(true);
     if (new URLSearchParams(location.search).get('selftest') === '1') return runSelfTest();
     if (new URLSearchParams(location.search).get('demo') === '1') seedDemo();
     render();
