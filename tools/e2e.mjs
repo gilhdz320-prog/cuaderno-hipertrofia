@@ -85,7 +85,7 @@ check('persiste la preparación', /Preparación \d+\/100/.test(await ev("documen
 /* semana */
 await ev("document.querySelector('[data-tab=semana]').click()");
 await sleep(500);
-check('la semana tiene 7 días', await ev("document.querySelectorAll('.day-row').length") === 7, await ev("document.querySelectorAll('.day-row').length"));
+check('la semana tiene 7 días', await ev("document.querySelectorAll('.day-row:not(.cardio)').length") === 7, await ev("document.querySelectorAll('.day-row:not(.cardio)').length"));
 check('tabla de volumen con 10 músculos', await ev("document.querySelectorAll('.vol-row').length") === 10, await ev("document.querySelectorAll('.vol-row').length"));
 
 /* cambio de frecuencia 4 → 3 */
@@ -95,7 +95,7 @@ check('previsualiza el reajuste', await ev("!!document.querySelector('#view butt
 await ev("[...document.querySelectorAll('button')].find(b=>b.textContent==='Reajustar a 3 días').click()");
 await sleep(600);
 check('aplica 3 días', /3 días/.test(await ev("document.getElementById('freqChip').textContent")), await ev("document.getElementById('freqChip').textContent"));
-check('quedan 3 sesiones', await ev("document.querySelectorAll('.day-row:not(.is-rest)').length") === 3, await ev("document.querySelectorAll('.day-row:not(.is-rest)').length"));
+check('quedan 3 sesiones', await ev("document.querySelectorAll('.day-row:not(.is-rest):not(.cardio)').length") === 3, await ev("document.querySelectorAll('.day-row:not(.is-rest):not(.cardio)').length"));
 check('el glúteo sigue alto', await ev("(function(){var t=document.body.textContent;var m=t.match(/Glúteo\\s*(\\d+)/);return m?+m[1]:null})()") >= 12, await ev("(function(){var t=document.body.textContent;var m=t.match(/Glúteo\\s*(\\d+)/);return m?+m[1]:null})()"));
 
 /* programa editable */

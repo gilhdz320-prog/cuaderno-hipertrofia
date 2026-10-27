@@ -916,6 +916,76 @@
   }
 
   /* ------------------------------------------------------------------ *
+   * 8.b Cardio: protocolos, ubicación en la semana y avisos
+   *     La interferencia del cardio con la hipertrofia depende de la dosis,
+   *     la proximidad a la sesión de fuerza y del músculo implicado; no de
+   *     hacer cardio en sí. Reglas: día sin fuerza, ≥48 h del tren inferior
+   *     y máximo 2 sesiones intensas por semana en déficit.
+   * ------------------------------------------------------------------ */
+  const CARDIO_PROTOCOLS = {
+    hiit_10x1: { id: 'hiit_10x1', label: 'HIIT 10 × (1 min fuerte / 1 min suave)', minutes: 20, rpe: 'RPE 8–9', cost: 'alto' },
+    hiit_4x4: { id: 'hiit_4x4', label: 'HIIT 4 × (4 min fuerte / 3 min suave)', minutes: 28, rpe: 'RPE 8–9', cost: 'alto' },
+    hiit_30_30: { id: 'hiit_30_30', label: 'HIIT 10 × (30 s fuerte / 30 s suave)', minutes: 12, rpe: 'RPE 8–9', cost: 'medio' },
+    liss: { id: 'liss', label: 'Cardio suave (caminar rápido, bici, elíptica)', minutes: 30, rpe: 'RPE 5–6', cost: 'bajo' }
+  };
+
+  /* Solo lo que realmente compite por recuperación: sentadilla, bisagra, unilateral
+   y trabajo pesado de rodilla. Pantorrilla o abducción no convierten un día en «piernas». */
+const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'knee_flex'];
+
+  function lowerDays(program, exMap) {
+    return program.days.filter((d) => d.slots.some((s) => LOWER_PATTERNS.indexOf(exOf(s.ex, exMap).pattern) >= 0)).map((d) => d.weekday);
+  }
+
+  function dayDistance(a, b) {
+    const d = Math.abs(a - b);
+    return Math.min(d, 7 - d);
+  }
+
+  /* Mejor día para el HIIT: lo ideal es un día sin pesas y a ≥2 días de piernas.
+     Si eso no existe, se acepta un día de tren superior (el HIIT va después). */
+  function suggestCardioDay(program, exMap, opts) {
+    opts = opts || {};
+    const lower = lowerDays(program, exMap);
+    const sessions = program.days.map((d) => d.weekday);
+    let best = { weekday: 6, score: -Infinity, reason: '' };
+    for (let wd = 1; wd <= 7; wd++) {
+      const toLower = lower.length ? Math.min.apply(null, lower.map((l) => dayDistance(wd, l))) : 7;
+      const isLowerDay = lower.indexOf(wd) >= 0;
+      const hasSession = sessions.indexOf(wd) >= 0;
+      const notes = [];
+      let score = 0;
+      if (!hasSession) { score += 2; notes.push('día sin pesas'); }
+      else if (!isLowerDay) { score += 0; notes.push('día de tren superior'); }
+      if (toLower >= 3) { score += 3; notes.push('lejos de piernas'); }
+      else if (toLower === 2) { score += 3; notes.push('a 2 días de piernas'); }
+      else if (toLower === 1) { score -= 3; notes.push('pegado a un día de piernas'); }
+      else { score -= 8; notes.push('el mismo día que piernas'); }
+      if (opts.avoid && opts.avoid === wd) score -= 3;
+      if (score > best.score) best = { weekday: wd, score: score, reason: notes.join(' · '), toLower: toLower, hasSession: hasSession, isLowerDay: isLowerDay };
+    }
+    return best;
+  }
+
+  function cardioWarnings(program, cardio, exMap) {
+    if (!cardio || !cardio.hiit) return [];
+    const lower = lowerDays(program, exMap);
+    const sessions = program.days.map((d) => d.weekday);
+    const wd = cardio.day;
+    const out = [];
+    const toLower = lower.length ? Math.min.apply(null, lower.map((l) => dayDistance(wd, l))) : 7;
+    const sameDaySession = sessions.indexOf(wd) >= 0;
+    if (lower.indexOf(wd) >= 0) {
+      out.push('HIIT el mismo día que tren inferior: la interferencia es mayor. Cámbialo de día o bájalo a cardio suave.');
+    } else if (sameDaySession) {
+      out.push('Ese día ya entrenas tren superior: haz el HIIT al final de la sesión, nunca antes, y con al menos 6 h desde que terminaste.');
+    }
+    if (toLower === 1) out.push('A un solo día de tren inferior: puede restar calidad a la sesión de piernas. Lo ideal son 48 h de separación.');
+    if (cardio.hiit > 2) out.push('Más de 2 HIIT por semana en déficit compite con la recuperación; con 1–2 hay estímulo suficiente.');
+    return out;
+  }
+
+  /* ------------------------------------------------------------------ *
    * 9. Cuestionario de preparación → 0–100 y semáforo
    * ------------------------------------------------------------------ */
   const READINESS_ITEMS = [
@@ -1100,6 +1170,8 @@
     out.swaps = (p && p.swaps) || {};
     out.prefs = (p && p.prefs) || {};
     out.equipment = Array.isArray(p && p.equipment) ? p.equipment : EQUIPMENT.map((e) => e.id);
+    out.cardio = Object.assign({ steps: 8000, hiit: 1, protocol: 'hiit_10x1', day: 6 }, (p && p.cardio) || {});
+    out.cardioLog = (p && p.cardioLog) || {};
     out.id = (p && p.id) || profileId();
     out.name = (p && p.name) || out.athlete.name || 'Atleta';
     return out;
@@ -1214,6 +1286,7 @@
     defaultState: defaultState, seedLoads: seedLoads, normalizeState: normalizeState,
     round1: round1, roundTo: roundTo, selfTest: selfTest,
     REPS_BAND: REPS_BAND, repsBandFor: repsBandFor, clampRepsFor: clampRepsFor, EXPERIENCE_FACTOR: EXPERIENCE_FACTOR,
+    CARDIO_PROTOCOLS: CARDIO_PROTOCOLS, lowerDays: lowerDays, suggestCardioDay: suggestCardioDay, cardioWarnings: cardioWarnings, dayDistance: dayDistance,
     EQUIPMENT: EQUIPMENT, requiredEquipment: requiredEquipment, isAvailable: isAvailable,
     pickAlternative: pickAlternative, applyConstraints: applyConstraints,
     migrateState: migrateState, normalizeProfile: normalizeProfile, profileId: profileId

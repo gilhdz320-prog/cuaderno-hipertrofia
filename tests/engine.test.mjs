@@ -243,3 +243,21 @@ test('las cargas iniciales dependen del peso y la experiencia', () => {
   const alto = CE.seedLoads({ athlete: { weightKg: 90, experience: 'intermedio' } });
   assert.ok(alto.hip_thrust > medio.hip_thrust, 'más peso corporal, más carga');
 });
+
+test('cardio: el HIIT se coloca lejos del tren inferior', () => {
+  const ex = CE.getExMap([]);
+  const p4 = CE.buildProgram({ n: 4, exMap: ex });
+  const s = CE.suggestCardioDay(p4, ex);
+  assert.equal(s.weekday, 6, 'con lunes/jueves de piernas, el sábado es el mejor día');
+  assert.deepEqual(CE.cardioWarnings(p4, { hiit: 1, day: 6 }, ex), [], 'sin conflictos');
+
+  const p3 = CE.buildProgram({ n: 3, exMap: ex });
+  assert.equal(CE.suggestCardioDay(p3, ex).weekday, 3, 'a 3 días, el miércoles tras el tren superior');
+  const w = CE.cardioWarnings(p3, { hiit: 1, day: 3 }, ex);
+  assert.ok(w.length === 1 && /tren superior/.test(w[0]), 'avisa de hacerlo después de la sesión');
+
+  const mal = CE.cardioWarnings(p4, { hiit: 1, day: 1 }, ex);
+  assert.ok(mal.some((x) => /mismo día que tren inferior/.test(x)), 'el lunes es piernas');
+  assert.ok(CE.cardioWarnings(p4, { hiit: 3, day: 6 }, ex).some((x) => /Más de 2/.test(x)), 'más de 2 HIIT avisa');
+  assert.deepEqual(CE.cardioWarnings(p4, { hiit: 0, day: 6 }, ex), [], 'sin HIIT no hay avisos');
+});

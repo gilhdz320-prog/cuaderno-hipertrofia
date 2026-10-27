@@ -857,6 +857,7 @@
         onclick: () => { PICKED_DATE = d; TAB = 'hoy'; render(); }
       }));
       days.appendChild(row);
+      if (S.cardio && S.cardio.hiit > 0 && weekdayOf(d) === S.cardio.day) days.appendChild(cardioRow(d));
     });
     wrap.appendChild(days);
 
@@ -896,6 +897,27 @@
     /* frecuencia */
     wrap.appendChild(frequencyCard());
     return wrap;
+  }
+
+  function cardioRow(date) {
+    const pr = CE.CARDIO_PROTOCOLS[(S.cardio && S.cardio.protocol) || 'hiit_10x1'] || CE.CARDIO_PROTOCOLS.hiit_10x1;
+    const done = !!(S.cardioLog && S.cardioLog[date] && S.cardioLog[date].done);
+    const row = el('div', { class: 'day-row cardio' + (done ? ' is-done' : '') });
+    row.appendChild(el('div', { class: 'dow', text: 'Cardio' }));
+    const what = el('div', { class: 'what' });
+    what.appendChild(el('b', { text: pr.label }));
+    what.appendChild(el('span', { text: pr.minutes + ' min · ' + pr.rpe + ' · ' + (done ? 'hecho' : 'pendiente') }));
+    row.appendChild(what);
+    row.appendChild(el('button', {
+      class: 'btn sm' + (done ? ' ghost' : ''), text: done ? '✓ hecho' : 'marcar',
+      onclick: () => {
+        S.cardioLog = S.cardioLog || {};
+        S.cardioLog[date] = { done: !done, minutes: pr.minutes };
+        save(true); render();
+        toast(done ? 'Cardio desmarcado' : 'Cardio marcado como hecho');
+      }
+    }));
+    return row;
   }
 
   function statCard(v, k, d) {
@@ -1473,6 +1495,10 @@
     });
     doc.appendChild(el('p', { class: 'note', text: 'Si el déficit se extiende a 15 semanas, el bloque se repite desde la semana 1 con las cargas alcanzadas como nuevo punto de partida, o se inserta una descarga extra en la 13 si la preparación media cae por debajo de 55 o el semáforo sale rojo dos semanas seguidas.' }));
 
+    doc.appendChild(el('h2', { text: 'Cardio y pasos' }));
+    doc.appendChild(el('p', { text: 'La interferencia entre cardio y fuerza depende de la dosis y de la proximidad, no de la existencia del cardio: aparece sobre todo con volumen alto de resistencia, en el mismo músculo y sin separación suficiente. Por eso la base son los pasos (' + nf0.format((S.cardio && S.cardio.steps) || 8000) + ' al día) y el HIIT va ' + (S.cardio && S.cardio.hiit ? 'una o dos veces por semana' : 'fuera del plan') + ', separado del tren inferior.' }));
+    doc.appendChild(el('p', { class: 'note', text: 'Regla práctica: HIIT en un día sin piernas o al final de una sesión de tren superior, con al menos 6 horas desde que terminaste; y nunca la tarde anterior a sentadilla o peso muerto. Los intervalos cortos afectan poco la señal de síntesis proteica, que dura entre 24 y 48 horas después de entrenar; el problema real es la recuperación acumulada en déficit.' }));
+
     doc.appendChild(el('h2', { text: 'Descanso y autorregulación' }));
     doc.appendChild(el('p', { text: 'Entre series, 2–3 minutos en hip thrust, RDL, sumo, búlgara y prensa; 60–90 segundos en aislamientos. En déficit el descanso largo no es pereza: es lo que permite mantener la carga con buena técnica cuando la energía está baja. El temporizador está en cada ejercicio.' }));
     doc.appendChild(el('p', { text: 'Al anotar la primera serie, el cuaderno compara reps y RIR reales con el objetivo y ofrece bajar las series siguientes, mantenerlas o subir si sobró margen. El botón «Hoy está muy pesado» aplica un −5 % a la sesión completa sin tocar la carga base, y el cuestionario de preparación produce una puntuación de 0 a 100 con semáforo. En un déficit agresivo, la señal de preparación es más fiable que el plan escrito.' }));
@@ -1635,6 +1661,7 @@
 
     wrap.appendChild(profileCard());
     wrap.appendChild(equipmentCard());
+    wrap.appendChild(cardioCard());
     wrap.appendChild(prefsCard());
     wrap.appendChild(aiCard());
     wrap.appendChild(dataCard());
@@ -1743,6 +1770,61 @@
       }),
       el('span', { class: 'tiny muted', text: 'vuelve al reparto original del bloque' })
     ));
+    return card;
+  }
+
+  function cardioCard() {
+    const card = el('div', { class: 'card' });
+    const c = S.cardio || { steps: 8000, hiit: 1, protocol: 'hiit_10x1', day: 6 };
+    card.appendChild(el('div', { class: 'card-title' },
+      el('h2', { text: 'Cardio y pasos' }),
+      el('span', { class: 'meta', text: c.hiit ? c.hiit + ' HIIT/semana' : 'sin HIIT' })
+    ));
+    card.appendChild(el('p', { class: 'hint', text: 'El cardio no compite con la hipertrofia por hacerlo, sino por hacerlo cerca de la fuerza y con demasiada dosis. La base son los pasos; el HIIT va separado de las piernas.' }));
+
+    const steps = el('input', { type: 'number', step: '500', min: '0', max: '30000', value: c.steps });
+    const protocol = el('select');
+    Object.keys(CE.CARDIO_PROTOCOLS).forEach((id) => {
+      const pr = CE.CARDIO_PROTOCOLS[id];
+      protocol.appendChild(el('option', { value: id, text: pr.label + ' · ' + pr.minutes + '′', selected: c.protocol === id ? true : null }));
+    });
+    const day = el('select');
+    for (let i = 1; i <= 7; i++) day.appendChild(el('option', { value: i, text: CE.weekdayName(i), selected: c.day === i ? true : null }));
+
+    const hiit = el('div', { class: 'seg' });
+    [0, 1, 2].forEach((n) => hiit.appendChild(el('button', {
+      type: 'button', text: n === 1 ? '1 / semana' : n === 0 ? 'ninguno' : n + ' / semana',
+      'aria-pressed': c.hiit === n ? 'true' : 'false',
+      onclick: () => { S.cardio = Object.assign({}, S.cardio, { hiit: n }); save(true); render(); }
+    })));
+
+    card.appendChild(el('div', { class: 'grid three' },
+      el('label', { class: 'fld' }, 'Pasos al día', steps),
+      el('label', { class: 'fld' }, 'HIIT', hiit),
+      el('label', { class: 'fld' }, 'Protocolo', protocol)
+    ));
+    card.appendChild(el('div', { class: 'row', style: { marginTop: '10px', alignItems: 'flex-end' } },
+      el('label', { class: 'fld', style: { maxWidth: '220px' } }, 'Día del HIIT', day),
+      el('button', {
+        class: 'btn sm', text: 'Guardar',
+        onclick: () => {
+          S.cardio = Object.assign({}, S.cardio, { steps: num(steps.value) || 8000, protocol: protocol.value, day: num(day.value) || 6 });
+          save(true); render(); toast('Cardio actualizado');
+        }
+      })
+    ));
+
+    const rec = CE.suggestCardioDay(S.program, EX);
+    const warn = CE.cardioWarnings(S.program, S.cardio, EX);
+    card.appendChild(el('div', { class: 'row', style: { marginTop: '12px', alignItems: 'center' } },
+      el('span', { class: 'tiny muted', text: 'Recomendado para tu reparto: ' + CE.weekdayName(rec.weekday) + ' (' + rec.reason + ')' }),
+      rec.weekday !== S.cardio.day ? el('button', {
+        class: 'btn sm ghost', text: 'usar',
+        onclick: () => { S.cardio.day = rec.weekday; save(true); render(); toast('HIIT movido a ' + CE.weekdayName(rec.weekday)); }
+      }) : null
+    ));
+    warn.forEach((w) => card.appendChild(el('div', { class: 'banner warn', style: { marginTop: '8px' } }, el('span', { text: w }))));
+    if (!warn.length) card.appendChild(el('div', { class: 'banner good', style: { marginTop: '8px' } }, el('span', { text: 'Sin conflictos: el HIIT cae lejos del tren inferior.' })));
     return card;
   }
 
@@ -2019,9 +2101,9 @@
       const steps = el('ol', { style: { margin: '4px 0 0 18px', padding: '0', fontSize: '.82rem', lineHeight: '1.6' } });
       steps.appendChild(el('li', {}, 'Entra en ', el('a', { href: 'https://platform.openai.com/api-keys', target: '_blank', rel: 'noopener', text: 'platform.openai.com/api-keys' }), ' e inicia sesión (o crea la cuenta).'));
       steps.appendChild(el('li', {}, 'Si es la primera vez, añade saldo en ', el('a', { href: 'https://platform.openai.com/settings/organization/billing/overview', target: '_blank', rel: 'noopener', text: 'Billing' }), '. La API es de pago por uso, no entra con ChatGPT Plus.'));
-      steps.appendChild(el('li', {}, 'Pulsa <b>Create new secret key</b>, ponle nombre (por ejemplo «cuaderno») y crea.'));
-      steps.appendChild(el('li', {}, 'Copia la clave: empieza por <span class="mono">sk-</span> y solo se muestra una vez.'));
-      steps.appendChild(el('li', {}, 'Pégala arriba, pulsa <b>Guardar clave</b> y luego <b>Probar</b>.'));
+      steps.appendChild(el('li', {}, 'Pulsa ', el('b', { text: 'Create new secret key' }), ', ponle nombre (por ejemplo «cuaderno») y crea.'));
+      steps.appendChild(el('li', {}, 'Copia la clave: empieza por ', el('span', { class: 'mono', text: 'sk-' }), ' y solo se muestra una vez.'));
+      steps.appendChild(el('li', {}, 'Pégala arriba, pulsa ', el('b', { text: 'Guardar clave' }), ' y luego ', el('b', { text: 'Probar' }), '.'));
       help.appendChild(steps);
       help.appendChild(el('div', { class: 'row tight', style: { marginTop: '6px' } },
         el('a', { class: 'btn sm', href: 'https://platform.openai.com/api-keys', target: '_blank', rel: 'noopener', text: 'Abrir OpenAI → API keys' }),
