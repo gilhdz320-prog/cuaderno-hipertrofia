@@ -48,7 +48,7 @@ await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, devi
 const results = [];
 const check = (name, cond, detail) => results.push({ name, pass: !!cond, detail: detail === undefined ? '' : String(detail) });
 
-const url = 'file://' + file;
+const url = /^https?:/.test(file) ? file : 'file://' + file;
 await send('Page.navigate', { url });
 await sleep(1500);
 
