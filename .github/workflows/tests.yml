@@ -28,6 +28,8 @@ jobs:
       - name: Reconstruir y comprobar que index.html coincide
         run: |
           node build.mjs
+          node tools/pack.mjs
+          test -f public/index.html && test -f public/sw.js && test -d public/icons
           if ! git diff --quiet -- index.html; then
             echo "::error::index.html no está actualizado. Ejecuta 'node build.mjs' y comitea el resultado."
             git diff --stat -- index.html

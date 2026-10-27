@@ -11,7 +11,10 @@
     "pdf": "bash tools/pdf.sh",
     "pwa": "node tools/pwa-check.mjs",
     "icons": "python3 tools/icons.py",
-    "all": "npm run build && npm test && npm run e2e"
+    "all": "npm run build && npm test && npm run e2e",
+    "pack": "node tools/pack.mjs"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": "22.x"
+  }
 }

@@ -111,7 +111,9 @@ La PWA funciona igual en cualquiera de los tres, pero **el origen importa**: los
 | **Vercel** | listo para importar (`vercel.json` incluido) | si quieres dominio propio, CDN y despliegues por push |
 | **Netlify** | opcional (`netlify.toml` incluido) | solo si quieres conservar `powerbuilgin.netlify.app` |
 
-**Vercel (recomendado si vas a mudarte):** <https://vercel.com/new> → importa `cuaderno-hipertrofia` → framework *Other*, build command vacío, output directory `.` → Deploy. Queda en `cuaderno-hipertrofia.vercel.app` y cada push republica.
+**Vercel (recomendado si vas a mudarte):** <https://vercel.com/new> → importa `cuaderno-hipertrofia` → framework *Other*. No toques nada más: el repo trae `vercel.json` con el build (`node build.mjs && node tools/pack.mjs`) y el output directory (`public/`), así que el deploy funciona por defecto. Queda en `cuaderno-hipertrofia.vercel.app` y cada push republica.
+
+Si un deploy anterior falló con *«No Output Directory named public»*, es porque Vercel estaba esperando una carpeta que la primera versión del repo no generaba: ya está corregido en `vercel.json`, solo hay que pulsar **Redeploy**.
 
 **Netlify:** en el sitio, *Site configuration → Build & deploy → Link repository* → elige el repo, rama `main`, build vacío, publish `.`.
 
@@ -131,7 +133,7 @@ Verifica manifiesto, iconos, instalabilidad, service worker y que la app abre si
 ├── manifest.webmanifest        PWA: nombre, iconos, atajos
 ├── sw.js                       service worker (generado; caché con hash)
 ├── icons/                      iconos 192, 512, maskable y apple-touch
-├── vercel.json                 cabeceras de caché para Vercel
+├── vercel.json                 build + output public/ + cabeceras
 ├── cuaderno-bloque.pdf         documento del bloque
 ├── abrir-cuaderno.command      lanzador con servidor local
 ├── src/
@@ -145,7 +147,8 @@ Verifica manifiesto, iconos, instalabilidad, service worker y que la app abre si
 │   ├── shot.mjs                capturas con emulación de móvil
 │   ├── pdf.sh                  genera el PDF
 │   ├── icons.py                regenera los iconos
-│   └── pwa-check.mjs           15 comprobaciones de PWA en Chrome real
+│   ├── pwa-check.mjs           15 comprobaciones de PWA en Chrome real
+│   └── pack.mjs                genera public/ (lo que sirve Vercel)
 ├── build.mjs                   empaqueta src/ en index.html
 └── .github/workflows/tests.yml CI: motor + verificación del HTML
 ```
@@ -155,7 +158,8 @@ Verifica manifiesto, iconos, instalabilidad, service worker y que la app abre si
 Requiere Node ≥ 20 (sin dependencias).
 
 ```bash
-npm run build   # regenera index.html desde src/
+npm run build   # regenera index.html y sw.js desde src/
+npm run pack    # genera public/ (app + PWA + PDF) para desplegar
 npm test        # 12 pruebas del motor
 npm run e2e     # 21 pruebas de interacción (necesita Chrome)
 npm run pdf     # regenera cuaderno-bloque.pdf (necesita Chrome)
