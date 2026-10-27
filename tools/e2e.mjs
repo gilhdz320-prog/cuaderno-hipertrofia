@@ -64,7 +64,7 @@ await ev("document.querySelectorAll('.qi').forEach(q=>{ q.querySelectorAll('.sca
 await sleep(200);
 const preview = await ev("document.getElementById('readPreview').textContent");
 check('calcula la puntuación al responder', /\d+\/100/.test(preview), preview);
-await ev("[...document.querySelectorAll('.sheet-actions button')].find(b=>b.textContent==='Guardar').click()");
+await ev("[...document.querySelectorAll('.sheet-actions button')].find(b=>/Guardar|Crear/.test(b.textContent)).click()");
 await sleep(400);
 check('guarda la preparación', /Preparación \d+\/100/.test(await ev("document.body.textContent")), await ev("(document.querySelector('.card .chip')||{}).textContent"));
 
@@ -121,7 +121,7 @@ await sleep(300);
 check('abre el panel de perfiles', await ev("!document.getElementById('modal').hidden"));
 await ev("[...document.querySelectorAll('.sheet button')].find(b=>b.textContent.includes('Nuevo perfil')).click()");
 await sleep(300);
-await ev("(function(){var i=document.querySelector('.sheet input[type=text]'); i.value='Prueba'; i.dispatchEvent(new Event('input')); [...document.querySelectorAll('.sheet-actions button')].find(b=>b.textContent==='Guardar').click(); return 1})()");
+await ev("(function(){var i=document.querySelector('.sheet input[type=text]'); i.value='Prueba'; i.dispatchEvent(new Event('input')); [...document.querySelectorAll('.sheet-actions button')].find(b=>/Guardar|Crear/.test(b.textContent)).click(); return 1})()");
 await sleep(600);
 check('crea y activa el perfil nuevo', (await ev("document.getElementById('profileName').textContent")) === 'Prueba', await ev("document.getElementById('profileName').textContent"));
 check('el perfil nuevo empieza sin registros', (await ev("Object.keys(Cuaderno.state().logs).length")) === 0);

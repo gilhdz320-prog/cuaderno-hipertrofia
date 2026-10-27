@@ -222,3 +222,24 @@ test('migración: dos perfiles conviven y uno no ve los datos del otro', () => {
   assert.equal(Object.keys(db.profiles[a.id].logs).length, 1);
   assert.equal(Object.keys(db.profiles[b.id].logs).length, 0);
 });
+
+test('rangos de reps por tipo de ejercicio', () => {
+  const ex = CE.getExMap([]);
+  assert.deepEqual(CE.clampRepsFor(ex.leg_ext, [6, 8]), [10, 12], 'la extensión no va a 6-8');
+  assert.deepEqual(CE.clampRepsFor(ex.lateral_raise, [6, 8]), [12, 14], 'el lateral, más alto');
+  assert.deepEqual(CE.clampRepsFor(ex.bench, [6, 8]), [6, 8], 'el compuesto pesado se respeta');
+  assert.deepEqual(CE.clampRepsFor(ex.bulgarian, [20, 25]), [6, 10], 'fuera de banda por arriba');
+  assert.deepEqual(CE.clampRepsFor(ex.triceps_pushdown, [6, 8]), [8, 10], 'no deja rangos de una repetición');
+  const ancho = (r) => r[1] - r[0];
+  assert.ok(ancho(CE.clampRepsFor(ex.calf_standing, [6, 8])) >= 2);
+});
+
+test('las cargas iniciales dependen del peso y la experiencia', () => {
+  const ligero = CE.seedLoads({ athlete: { weightKg: 55, experience: 'principiante' } });
+  const medio = CE.seedLoads({ athlete: { weightKg: 55, experience: 'intermedio' } });
+  const pesado = CE.seedLoads({ athlete: { weightKg: 55, experience: 'avanzado' } });
+  assert.ok(ligero.bench < medio.bench, 'principiante arranca más bajo');
+  assert.ok(pesado.bench > medio.bench, 'avanzado arranca más alto');
+  const alto = CE.seedLoads({ athlete: { weightKg: 90, experience: 'intermedio' } });
+  assert.ok(alto.hip_thrust > medio.hip_thrust, 'más peso corporal, más carga');
+});

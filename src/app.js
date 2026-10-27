@@ -127,13 +127,16 @@
 
   /* ---------- perfiles ---------- */
   function profileList() { return Object.keys(DB.profiles).map((id) => DB.profiles[id]); }
-  function createProfile(name) {
-    const p = CE.normalizeProfile({ name: name, athlete: { name: name } });
+  function createProfile(opts) {
+    opts = opts || {};
+    const name = opts.name || 'Atleta';
+    const p = CE.normalizeProfile({ name: name, athlete: { name: name, weightKg: opts.weightKg || 65, experience: opts.experience || 'intermedio' } });
     p.program = CE.buildProgram({
       n: p.block.freq, exMap: CE.getExMap(p.custom), loads: p.loads,
       equipment: p.equipment, prefs: p.prefs, swaps: p.swaps
     });
     p.loads = CE.seedLoads(p);
+    p.program = CE.buildProgram({ n: p.block.freq, exMap: CE.getExMap(p.custom), loads: p.loads, equipment: p.equipment, prefs: p.prefs, swaps: p.swaps });
     DB.profiles[p.id] = p;
     DB.activeId = p.id;
     save(true);
@@ -469,6 +472,7 @@
       loadBox.appendChild(el('button', { text: '+', 'aria-label': 'subir carga', onclick: () => bumpLoad(date, slot, entry, (ex.step || 2.5)) }));
       tools.appendChild(loadBox);
       tools.appendChild(el('span', { class: 'tiny muted', text: 'kg' }));
+      if (!last) tools.appendChild(el('span', { class: 'pill', title: 'Calculada desde tu peso corporal; se corrige en la primera serie', text: 'estimada' }));
       head.appendChild(tools);
     } else {
       head.appendChild(el('button', { class: 'btn sm', text: 'Incluir hoy', onclick: () => { L.optional[idx] = true; save(); render(); } }));
@@ -1080,6 +1084,9 @@
     st.appendChild(el('button', { text: '+', 'aria-label': 'más series', onclick: () => { slot.sets = Math.min(8, slot.sets + 1); save(); render(); } }));
     row.appendChild(st);
 
+    const band = CE.repsBandFor(ex);
+    const fuera = slot.reps[0] < band[0] || slot.reps[1] > band[1];
+    if (fuera) row.appendChild(el('span', { class: 'tiny amber', style: { gridColumn: '1 / -1' }, text: 'sugerido para este tipo: ' + band[0] + '–' + band[1] + ' reps' }));
     const reps = el('div', { class: 'reps' });
     reps.appendChild(el('input', { type: 'number', min: '1', max: '40', value: slot.reps[0], 'aria-label': 'reps mínimo', onchange: (ev) => { slot.reps[0] = Math.max(1, num(ev.target.value)); save(); render(); } }));
     reps.appendChild(el('span', { class: 'muted', text: '–' }));
@@ -1574,13 +1581,37 @@
     });
     body.appendChild(el('button', {
       class: 'btn wide', style: { marginTop: '10px' }, text: '+ Nuevo perfil',
-      onclick: () => promptText('Nuevo perfil', 'Tendrá su propio programa, sus cargas y sus registros.', '', (v) => {
-        const p = createProfile(v);
-        closeSheet(); refreshDerived(); render();
-        toast('Perfil «' + p.name + '» creado');
-      })
+      onclick: newProfileSheet
     }));
     openSheet('Perfiles', 'Cada persona guarda sus cargas, su programa y sus registros por separado, en este dispositivo.', body, [{ label: 'Cerrar', ghost: true, onClick: closeSheet }]);
+  }
+
+  function newProfileSheet() {
+    const name = el('input', { type: 'text', placeholder: 'Nombre' });
+    const weight = el('input', { type: 'number', step: '0.1', min: '30', max: '200', value: '65' });
+    const exp = el('select');
+    [['principiante', 'Principiante · menos de 1 año'], ['intermedio', 'Intermedio · 1 a 3 años'], ['avanzado', 'Avanzado · más de 3 años']].forEach(([id, label]) => {
+      exp.appendChild(el('option', { value: id, text: label, selected: id === 'intermedio' ? true : null }));
+    });
+    const body = el('div', { class: 'stack' },
+      el('label', { class: 'fld' }, 'Nombre', name),
+      el('div', { class: 'grid two' },
+        el('label', { class: 'fld' }, 'Peso corporal (kg)', weight),
+        el('label', { class: 'fld' }, 'Experiencia', exp)
+      ),
+      el('p', { class: 'tiny muted', text: 'El peso y la experiencia solo se usan para estimar las cargas de la primera semana. En cuanto registres una serie, manda tu dato.' })
+    );
+    openSheet('Nuevo perfil', 'Tendrá su propio programa, sus cargas y sus registros.', body, [
+      { label: 'Cancelar', ghost: true, onClick: closeSheet },
+      {
+        label: 'Crear', primary: true, onClick: () => {
+          const p = createProfile({ name: name.value.trim() || 'Atleta', weightKg: num(weight.value) || 65, experience: exp.value });
+          closeSheet(); refreshDerived(); render();
+          toast('Perfil «' + p.name + '» creado');
+        }
+      }
+    ]);
+    setTimeout(() => name.focus(), 60);
   }
 
   /* ------------------------------------------------------------------ *
@@ -1647,6 +1678,28 @@
       }),
       el('span', { class: 'tiny muted', text: 'Proteína objetivo: ' + Math.round(S.athlete.proteinMin * S.athlete.weightKg) + '–' + Math.round(S.athlete.proteinMax * S.athlete.weightKg) + ' g/día' })
     ));
+    const exp = el('select');
+    [['principiante', 'Principiante · menos de 1 año'], ['intermedio', 'Intermedio · 1 a 3 años'], ['avanzado', 'Avanzado · más de 3 años']].forEach(([id, label]) => {
+      exp.appendChild(el('option', { value: id, text: label, selected: (S.athlete.experience || 'intermedio') === id ? true : null }));
+    });
+    card.appendChild(el('div', { class: 'row', style: { marginTop: '10px', alignItems: 'flex-end' } },
+      el('label', { class: 'fld', style: { maxWidth: '280px' } }, 'Experiencia (para estimar cargas)', exp),
+      el('button', {
+        class: 'btn sm', text: 'Recalcular cargas estimadas',
+        onclick: () => {
+          S.athlete.experience = exp.value;
+          const fresh = CE.seedLoads(S);
+          let n = 0;
+          Object.keys(fresh).forEach((exId) => {
+            const tieneDatos = CE.lastEntryFor(S.logs, exId);
+            if (!tieneDatos && fresh[exId]) { S.loads[exId] = fresh[exId]; n++; }
+          });
+          save(true); render();
+          toast(n ? 'Recalculadas ' + n + ' cargas (las que ya registraste no se tocan)' : 'No hay cargas estimadas que cambiar');
+        }
+      })
+    ));
+    card.appendChild(el('p', { class: 'tiny muted', style: { marginTop: '6px' }, text: 'Las cargas son una estimación a partir de tu peso corporal y tu experiencia (banca ≈ 0,40 × peso; hip thrust ≈ 1,10 ×; lateral ≈ 0,05 ×). En cuanto registras una serie, manda tu dato.' }));
     return card;
   }
 
@@ -1817,6 +1870,8 @@
         'Reglas: usa solo ids del catálogo; 4-6 ejercicios por sesión; 12-20 series por sesión;',
         'no repitas el mismo ejercicio dos veces en una sesión; si hay 3 o más días, el glúteo aparece al menos dos veces;',
         'en déficit el RIR objetivo es 1-2 en básicos; respeta el material disponible.',
+        'rangos de repeticiones por tipo (no los salgas): compuestos 6-10, empuje inclinado y tirón unilateral 8-12,',
+        'aislamientos (extensión, femoral, bíceps, tríceps) 8-15, laterales, posterior, pantorrilla y abducción 12-20.',
         'Catálogo (id = nombre [músculo, patrón]):',
         aiCatalog()
       ].join('\n');
@@ -1839,6 +1894,7 @@
 
   function applyAIPlan(plan) {
     const dropped = [];
+    const adjusted = [];
     const days = (plan.days || []).slice(0, 6);
     const built = [];
     days.forEach((d, i) => {
@@ -1851,6 +1907,11 @@
         const sets = Math.max(1, Math.min(6, Math.round(num(ex.sets) || 3)));
         let reps = Array.isArray(ex.reps) ? [Math.max(1, Math.min(30, Math.round(num(ex.reps[0]) || 8))), Math.max(1, Math.min(30, Math.round(num(ex.reps[1]) || 10)))] : [8, 10];
         if (reps[1] < reps[0]) reps = [reps[0], reps[0]];
+        const clamped = CE.clampRepsFor(EX[id], reps);
+        if (clamped[0] !== reps[0] || clamped[1] !== reps[1]) {
+          adjusted.push(EX[id].name + ': ' + reps[0] + '–' + reps[1] + ' → ' + clamped[0] + '–' + clamped[1]);
+          reps = clamped;
+        }
         slots.push({
           ex: id, sets: sets, reps: reps,
           rir: Math.max(0, Math.min(4, num(ex.rir) === 0 ? 0 : (num(ex.rir) || 2))),
@@ -1873,7 +1934,7 @@
     S.block.freq = built.length;
     save(true);
     return {
-      kind: 'plan', notes: plan.notes || '', dropped: dropped,
+      kind: 'plan', notes: plan.notes || '', dropped: dropped, adjusted: adjusted,
       days: built.map((d) => ({ name: d.name, focus: d.focus, weekday: d.weekday, slots: d.slots.length })),
       sets: CE.countSets(program),
       tonnage: CE.programStats(program, S.loads, EX).tonnage
@@ -2002,6 +2063,9 @@
     r.days.forEach((d) => box.appendChild(el('div', { class: 'tiny', text: CE.weekdayName(d.weekday) + ' · ' + d.name + ' — ' + d.slots + ' ejercicios' })));
     if (r.dropped && r.dropped.length) {
       box.appendChild(el('div', { class: 'tiny amber', style: { marginTop: '8px' }, text: 'Descartado: ' + r.dropped.join(', ') }));
+    }
+    if (r.adjusted && r.adjusted.length) {
+      box.appendChild(el('div', { class: 'tiny muted', style: { marginTop: '4px' }, text: 'Rangos corregidos: ' + r.adjusted.join(' · ') }));
     }
     box.appendChild(el('div', { class: 'tiny muted', style: { marginTop: '8px' }, text: 'Tonelaje previsto ' + tn(r.tonnage) + '. Ya está aplicado: revísalo en Programa.' }));
     if (AI_UNDO) {

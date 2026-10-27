@@ -183,6 +183,44 @@
 
   /* Mejor sustituto: mismo patrón, mismo músculo principal, que sí tenga
      el equipo y que no esté marcado como «no me gusta». */
+  /* Rangos recomendados por patrón. La evidencia muestra hipertrofia similar
+     entre ~6 y ~30 reps cerca del fallo (Schoenfeld 2017; Morton 2019), así que
+     el criterio no es "más reps = mejor", sino el coste: en aislamientos y
+     máquinas, cargas altas añaden estrés articular sin estímulo extra, y en
+     déficit interesa que cada serie cueste poca recuperación. */
+  const REPS_BAND = {
+    hip_thrust: [6, 10], hinge: [6, 10], squat: [6, 10], lunge: [6, 10],
+    push_h: [6, 10], push_i: [8, 12], push_v: [6, 10],
+    pull_v: [6, 10], pull_h: [6, 10], pull_uni: [8, 12],
+    knee_ext: [10, 15], knee_flex: [10, 15],
+    lateral: [12, 20], rear_delt: [12, 20],
+    biceps: [8, 15], triceps: [8, 15],
+    calf: [10, 20], abduction: [12, 20], kickback: [12, 20], core: [8, 15]
+  };
+
+  function repsBandFor(ex) {
+    return REPS_BAND[ex && ex.pattern] || [8, 12];
+  }
+
+  /* Devuelve el rango dentro de la banda conservando el ancho pedido. */
+  function clampRepsFor(ex, reps) {
+    const band = repsBandFor(ex);
+    const lo = band[0], hi = band[1];
+    let a = Number(reps && reps[0]) || lo;
+    let b = Number(reps && reps[1]) || hi;
+    if (b < a) b = a;
+    const w = Math.min(6, b - a);
+    if (b < lo) { a = lo; b = Math.min(hi, lo + w); }
+    else if (a > hi) { b = hi; a = Math.max(lo, hi - w); }
+    else if (b > hi) { b = hi; a = Math.max(lo, hi - w); }
+    else { a = Math.max(a, lo); b = Math.min(b, hi); }
+    /* un rango de una sola repetición no es programable */
+    if (b - a < 2) b = Math.min(hi, a + 2);
+    if (b - a < 2) a = Math.max(lo, b - 2);
+    if (b < a) b = a;
+    return [a, b];
+  }
+
   const COMPOUND_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'push_h', 'push_i', 'push_v', 'pull_v', 'pull_h', 'pull_uni'];
 
   function pickAlternative(exId, opts) {
@@ -985,7 +1023,7 @@
     const monday = mondayOf(t);
     const state = {
       version: VERSION,
-      athlete: { name: 'Atleta', weightKg: 65, heightCm: 165, kcal: 1675, proteinMin: 1.8, proteinMax: 2.2 },
+      athlete: { name: 'Atleta', weightKg: 65, heightCm: 165, kcal: 1675, proteinMin: 1.8, proteinMax: 2.2, experience: 'intermedio' },
       block: {
         name: 'Bloque 3 · Hipertrofia en déficit',
         start: toISODate(monday),
@@ -1007,12 +1045,16 @@
     return state;
   }
 
+  const EXPERIENCE_FACTOR = { principiante: 0.7, intermedio: 1, avanzado: 1.25 };
+
   function seedLoads(state) {
     const bw = (state.athlete && state.athlete.weightKg) || 65;
+    const exp = (state.athlete && state.athlete.experience) || 'intermedio';
+    const factor = EXPERIENCE_FACTOR[exp] || 1;
     const out = {};
     Object.keys(EX_POOL).forEach(id => {
       const e = EX_POOL[id];
-      out[id] = e.bwFactor ? roundTo(e.bwFactor * bw, e.step || 2.5) : 0;
+      out[id] = e.bwFactor ? roundTo(e.bwFactor * bw * factor, e.step || 2.5) : 0;
     });
     return out;
   }
@@ -1171,6 +1213,7 @@
     readiness: readiness, logTonnage: logTonnage, logSets: logSets, logByMuscle: logByMuscle, weeklySummary: weeklySummary,
     defaultState: defaultState, seedLoads: seedLoads, normalizeState: normalizeState,
     round1: round1, roundTo: roundTo, selfTest: selfTest,
+    REPS_BAND: REPS_BAND, repsBandFor: repsBandFor, clampRepsFor: clampRepsFor, EXPERIENCE_FACTOR: EXPERIENCE_FACTOR,
     EQUIPMENT: EQUIPMENT, requiredEquipment: requiredEquipment, isAvailable: isAvailable,
     pickAlternative: pickAlternative, applyConstraints: applyConstraints,
     migrateState: migrateState, normalizeProfile: normalizeProfile, profileId: profileId
