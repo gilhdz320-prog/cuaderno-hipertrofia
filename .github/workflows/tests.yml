@@ -1,0 +1,35 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  motor:
+    name: Motor (12 pruebas)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --test tests/engine.test.mjs
+
+  build:
+    name: HTML al día
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Reconstruir y comprobar que index.html coincide
+        run: |
+          node build.mjs
+          if ! git diff --quiet -- index.html; then
+            echo "::error::index.html no está actualizado. Ejecuta 'node build.mjs' y comitea el resultado."
+            git diff --stat -- index.html
+            exit 1
+          fi

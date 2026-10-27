@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Cuaderno · Hipertrofia en déficit</title>
+  <meta name="description" content="Cuaderno de entrenamiento de hipertrofia para 4 días por semana, ajustable a 2, 3, 5 o 6, con volumen, tonelaje y progresión automáticos.">
+  <meta name="theme-color" content="#f3efe6">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231b1713'/%3E%3Cpath d='M18 44V20h6v9h16v-9h6v24h-6v-9H24v9z' fill='%23f3efe6'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-in">
+      <div class="brand">
+        <b>cuaderno</b>
+        <span class="sub" id="blockName">Hipertrofia en déficit</span>
+      </div>
+      <div class="spacer"></div>
+      <div class="chips">
+        <span class="chip" id="weekChip">semana 1</span>
+        <span class="chip" id="freqChip">4 días</span>
+        <span class="save" id="saveState"><i class="dot"></i>guardado</span>
+        <button class="btn icon ghost" id="themeBtn" title="Cambiar tema" aria-label="Cambiar entre tema claro y oscuro">◐</button>
+      </div>
+    </div>
+    <nav class="tabs" aria-label="Secciones del cuaderno">
+      <div class="tabs-in">
+        <button class="tab" data-tab="hoy" aria-selected="true">Hoy</button>
+        <button class="tab" data-tab="semana">Semana</button>
+        <button class="tab" data-tab="programa">Programa</button>
+        <button class="tab" data-tab="progreso">Progreso</button>
+        <button class="tab" data-tab="bloque">El bloque</button>
+      </div>
+    </nav>
+  </header>
+
+  <div class="banner warn hidden no-print" id="storageBanner" style="max-width:1120px;margin:12px auto 0;width:calc(100% - 40px)">
+    <b>No se puede guardar en este navegador.</b>
+    <span>Los datos viven solo en esta pestaña. Si abres el archivo directamente (file://), prueba a servirlo con un servidor local o usa la copia .json.</span>
+  </div>
+
+  <main id="view"></main>
+
+  <div class="timer hidden" id="timer" role="timer" aria-live="polite">
+    <div>
+      <div class="lab" id="timerLabel">descanso</div>
+      <div class="t" id="timerTime">0:00</div>
+    </div>
+    <button id="timerMinus">−15</button>
+    <button id="timerPlus">+15</button>
+    <button id="timerSkip">saltar</button>
+  </div>
+
+  <div class="modal" id="modal" hidden>
+    <div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <script src="engine.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
