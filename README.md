@@ -2,6 +2,8 @@
 
 Programa de entrenamiento de hipertrofia para **4 días por semana que se reajusta solo** si esa semana solo puedes ir 2, 3, 5 o 6. Calcula volumen semanal, tonelaje, progresión y descargas, y guarda cada serie con sus kilos, repeticiones y RIR.
 
+**App:** <https://cuaderno-hipertrofia-chi.vercel.app>
+
 [![tests](https://github.com/gilhdz320-prog/cuaderno-hipertrofia/actions/workflows/tests.yml/badge.svg)](https://github.com/gilhdz320-prog/cuaderno-hipertrofia/actions/workflows/tests.yml)
 [![licencia: MIT](https://img.shields.io/badge/licencia-MIT-black.svg)](LICENSE)
 
@@ -23,11 +25,11 @@ cd cuaderno-hipertrofia
 open index.html          # o doble clic en abrir-cuaderno.command
 ```
 
-**En el móvil (GitHub Pages)**
+**En el móvil (PWA)**
 
-Si Pages está activo: <https://gilhdz320-prog.github.io/cuaderno-hipertrofia/>
+Abre <https://cuaderno-hipertrofia-chi.vercel.app> y añádela a la pantalla de inicio: iPhone → Compartir → *Añadir a pantalla de inicio*; Android → botón **Instalar** de la cabecera.
 
-En iPhone: Compartir → *Añadir a pantalla de inicio*. Queda como una app.
+Espejo en GitHub Pages: <https://gilhdz320-prog.github.io/cuaderno-hipertrofia/>
 
 **Versión imprimible**
 
