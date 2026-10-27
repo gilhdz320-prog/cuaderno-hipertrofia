@@ -261,3 +261,42 @@ test('cardio: el HIIT se coloca lejos del tren inferior', () => {
   assert.ok(CE.cardioWarnings(p4, { hiit: 3, day: 6 }, ex).some((x) => /Más de 2/.test(x)), 'más de 2 HIIT avisa');
   assert.deepEqual(CE.cardioWarnings(p4, { hiit: 0, day: 6 }, ex), [], 'sin HIIT no hay avisos');
 });
+
+test('ciclo: fases y predicción del siguiente periodo', () => {
+  const c = { enabled: true, lastStart: '2026-10-20', cycleLength: 28, periodLength: 5 };
+  assert.equal(CE.cycleInfo(c, '2026-10-20').day, 1);
+  assert.equal(CE.cycleInfo(c, '2026-10-20').phase, 'menstrual');
+  assert.equal(CE.cycleInfo(c, '2026-10-24').phase, 'menstrual');
+  assert.equal(CE.cycleInfo(c, '2026-10-28').phase, 'folicular');
+  assert.equal(CE.cycleInfo(c, '2026-11-02').phase, 'ovulacion');
+  assert.equal(CE.cycleInfo(c, '2026-11-08').phase, 'lutea');
+  const next = CE.cycleInfo(c, '2026-11-01');
+  assert.equal(next.nextStart, '2026-11-17');
+  assert.equal(CE.cycleInfo({ enabled: false, lastStart: '2026-10-20' }, '2026-10-20'), null, 'desactivado no calcula');
+});
+
+test('ciclo: el ajuste tiene techo y no toca el programa', () => {
+  const info = CE.cycleInfo({ enabled: true, lastStart: '2026-10-20', cycleLength: 28, periodLength: 5 }, '2026-10-21');
+  const fuerte = CE.cycleAdjustment(info, { strength: 2, pain: true, sleep: false }, { score: 30 });
+  assert.ok(fuerte.loadFactor >= 0.85, 'nunca baja del 85 %');
+  assert.equal(fuerte.loadFactor, 0.9, 'fuerza muy baja + preparación roja = −10 %');
+  assert.equal(fuerte.setDelta, -2, 'nunca quita más de 2 series');
+  assert.ok(fuerte.active);
+  const suave = CE.cycleAdjustment(info, { strength: 0 }, null);
+  assert.equal(suave.active, false, 'sin síntomas no hay ajuste');
+  assert.equal(suave.loadFactor, 1);
+});
+
+test('ciclo: patrón propio a partir de los registros', () => {
+  const c = { enabled: true, lastStart: '2026-10-01', cycleLength: 28, periodLength: 5 };
+  const logs = {
+    '2026-10-01': { cycle: { strength: 2 } },
+    '2026-10-02': { cycle: { strength: 2 } },
+    '2026-10-09': { cycle: { strength: 0 } },
+    '2026-10-16': { cycle: { strength: 0 } }
+  };
+  const pat = CE.cyclePattern(logs, c);
+  assert.ok(pat, 'con 4 registros ya hay patrón');
+  assert.equal(pat.weakest[0].day, 1, 'el día 1 es el más flojo');
+  assert.equal(CE.cyclePattern({ '2026-10-01': { cycle: { strength: 2 } } }, c), null, 'con uno no alcanza');
+});

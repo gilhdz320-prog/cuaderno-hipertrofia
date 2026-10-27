@@ -146,6 +146,28 @@ check('conserva los registros del primer perfil', (await ev("Object.keys(Cuadern
 const sigueGuardada = await ev("(function(){var L=Cuaderno.state().logs; return Object.keys(L).some(function(d){return Object.keys(L[d].entries||{}).some(function(e){return (L[d].entries[e].sets||[]).some(function(s){return s&&s.done})})})})()");
 check('la serie marcada sigue guardada en sus datos', sigueGuardada === true, sigueGuardada);
 
+/* ---------- ciclo: activar y autorregular ---------- */
+await ev("document.querySelector('[data-tab=ajustes]').click()");
+await sleep(500);
+await ev("(function(){var c=[...document.querySelectorAll('.card')].find(x=>/Ciclo y autorregulación/.test(x.textContent)); c.querySelectorAll('.seg button')[0].click(); return 1})()");
+await sleep(500);
+await ev("(function(){var c=[...document.querySelectorAll('.card')].find(x=>/Ciclo y autorregulación/.test(x.textContent)); var d=c.querySelector('input[type=date]'); var now=new Date(); now=new Date(now.getTime()-now.getTimezoneOffset()*60000); d.value=now.toISOString().slice(0,10); [...c.querySelectorAll('button')].find(function(b){return b.textContent==='Guardar'}).click(); return 1})()");
+await sleep(600);
+check('activa el ciclo y guarda la fecha', (await ev("Cuaderno.state().cycle.enabled")) === true && (await ev("Cuaderno.state().cycle.lastStart")).length === 10, await ev("Cuaderno.state().cycle.lastStart"));
+
+await ev("document.querySelector('[data-tab=hoy]').click()");
+await sleep(600);
+check('aparece el chequeo del día', (await ev("document.body.textContent.indexOf('¿Cómo va la fuerza hoy?') >= 0")) === true);
+const setsAntes = await ev("(function(){var S=Cuaderno.state(); var s=S.program.days[0]; var n=0; S.program.days.forEach(function(d){d.slots.forEach(function(x){n+=x.sets})}); return n})()");
+await ev("[...document.querySelectorAll('button')].find(function(b){return b.textContent==='Muy baja'}).click()");
+await sleep(700);
+const ciclo = await ev("(function(){var S=Cuaderno.state(); var k=Object.keys(S.logs)[0]; var L=S.logs[k]; return JSON.stringify({mod:L.modifier, delta:L.setDelta, check:L.cycle})})()");
+const cst = JSON.parse(ciclo);
+check('aplica el ajuste de carga', cst.mod <= -5, ciclo);
+check('quita series ese día', cst.delta <= -1, ciclo);
+check('muestra el aviso de ajuste', (await ev("document.body.textContent.indexOf('Sesión ajustada') >= 0")) === true);
+check('el programa no se toca', (await ev("(function(){var S=Cuaderno.state(); var n=0; S.program.days.forEach(function(d){d.slots.forEach(function(x){n+=x.sets})}); return n})()")) === setsAntes, setsAntes);
+
 check('sin excepciones de JavaScript', exceptions.length === 0, exceptions.join(' | '));
 
 console.log(JSON.stringify(results.map(r => (r.pass ? 'PASS ' : 'FAIL ') + r.name + (r.detail ? '  [' + r.detail + ']' : '')), null, 1));

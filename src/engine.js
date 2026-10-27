@@ -986,6 +986,88 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
   }
 
   /* ------------------------------------------------------------------ *
+   * 8.c Ciclo menstrual y autorregulación
+   *     La evidencia (McNulty 2020) muestra efectos pequeños y muy
+   *     individuales: no se asume un patrón, se pregunta y se ajusta.
+   * ------------------------------------------------------------------ */
+  function daysBetween(a, b) {
+    return Math.round((parseDate(b) - parseDate(a)) / 86400000);
+  }
+
+  function cycleInfo(cycle, dateISO) {
+    if (!cycle || !cycle.enabled || !cycle.lastStart) return null;
+    const len = Math.max(21, Math.min(45, cycle.cycleLength || 28));
+    const period = Math.max(2, Math.min(10, cycle.periodLength || 5));
+    const d = daysBetween(cycle.lastStart, dateISO);
+    const day = ((d % len) + len) % len + 1;
+    let phase = 'folicular';
+    if (day <= period) phase = 'menstrual';
+    else if (day <= len - 15) phase = 'folicular';
+    else if (day <= len - 13) phase = 'ovulacion';
+    else phase = 'lutea';
+    const cyclesDone = Math.floor(d / len) + 1;
+    const nextStart = toISODate(addDays(cycle.lastStart, cyclesDone * len));
+    return {
+      day: day, phase: phase, cycleLength: len, periodLength: period,
+      nextStart: nextStart, daysToNext: Math.max(0, daysBetween(dateISO, nextStart))
+    };
+  }
+
+  const CYCLE_PHASE_LABEL = {
+    menstrual: 'menstruación', folicular: 'fase folicular', ovulacion: 'ovulación', lutea: 'fase lútea'
+  };
+
+  /* Ajuste del día: combina lo que ella reporta con la preparación.
+     La carga nunca baja más de un 15 % ni se quitan más de 2 series. */
+  function cycleAdjustment(info, check, readiness) {
+    let loadFactor = 1, setDelta = 0, rirDelta = 0;
+    const reasons = [];
+    check = check || {};
+    if (typeof check.strength === 'number') {
+      if (check.strength >= 2) { loadFactor = Math.min(loadFactor, 0.92); setDelta -= 1; rirDelta += 0.5; reasons.push('fuerza muy baja'); }
+      else if (check.strength === 1) { loadFactor = Math.min(loadFactor, 0.95); reasons.push('fuerza algo baja'); }
+    }
+    if (check.pain) { setDelta -= 1; reasons.push('dolor o malestar'); }
+    if (check.sleep === false) { setDelta -= 1; reasons.push('mal descanso'); }
+    if (readiness && typeof readiness.score === 'number') {
+      if (readiness.score < 40) { loadFactor = Math.min(loadFactor, 0.9); setDelta = Math.min(setDelta, -1); reasons.push('preparación roja'); }
+      else if (readiness.score < 55) { loadFactor = Math.min(loadFactor, 0.95); reasons.push('preparación ámbar'); }
+    }
+    loadFactor = Math.max(0.85, loadFactor);
+    setDelta = Math.max(-2, setDelta);
+    return {
+      loadFactor: Math.round(loadFactor * 100) / 100,
+      loadPct: Math.round((loadFactor - 1) * 100),
+      setDelta: setDelta, rirDelta: rirDelta,
+      reasons: reasons,
+      active: loadFactor < 1 || setDelta < 0,
+      phase: info ? info.phase : null
+    };
+  }
+
+  /* Patrón propio: ¿en qué días del ciclo reporta menos fuerza? */
+  function cyclePattern(logs, cycle) {
+    if (!cycle || !cycle.enabled || !cycle.lastStart) return null;
+    const byDay = {};
+    let n = 0;
+    Object.keys(logs || {}).forEach((date) => {
+      const L = logs[date];
+      if (!L || !L.cycle || typeof L.cycle.strength !== 'number') return;
+      const info = cycleInfo(cycle, date);
+      if (!info) return;
+      byDay[info.day] = byDay[info.day] || [];
+      byDay[info.day].push(L.cycle.strength);
+      n++;
+    });
+    if (n < 4) return null;
+    const weakest = Object.keys(byDay)
+      .map((d) => ({ day: Number(d), avg: byDay[d].reduce((a, b) => a + b, 0) / byDay[d].length, n: byDay[d].length }))
+      .filter((x) => x.avg >= 1)
+      .sort((a, b) => b.avg - a.avg);
+    return { samples: n, weakest: weakest.slice(0, 3) };
+  }
+
+  /* ------------------------------------------------------------------ *
    * 9. Cuestionario de preparación → 0–100 y semáforo
    * ------------------------------------------------------------------ */
   const READINESS_ITEMS = [
@@ -1172,6 +1254,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     out.equipment = Array.isArray(p && p.equipment) ? p.equipment : EQUIPMENT.map((e) => e.id);
     out.cardio = Object.assign({ steps: 8000, hiit: 1, protocol: 'hiit_10x1', day: 6 }, (p && p.cardio) || {});
     out.cardioLog = (p && p.cardioLog) || {};
+    out.cycle = Object.assign({ enabled: false, lastStart: '', cycleLength: 28, periodLength: 5 }, (p && p.cycle) || {});
     out.id = (p && p.id) || profileId();
     out.name = (p && p.name) || out.athlete.name || 'Atleta';
     return out;
@@ -1286,6 +1369,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     defaultState: defaultState, seedLoads: seedLoads, normalizeState: normalizeState,
     round1: round1, roundTo: roundTo, selfTest: selfTest,
     REPS_BAND: REPS_BAND, repsBandFor: repsBandFor, clampRepsFor: clampRepsFor, EXPERIENCE_FACTOR: EXPERIENCE_FACTOR,
+    cycleInfo: cycleInfo, cycleAdjustment: cycleAdjustment, cyclePattern: cyclePattern, CYCLE_PHASE_LABEL: CYCLE_PHASE_LABEL, daysBetween: daysBetween,
     CARDIO_PROTOCOLS: CARDIO_PROTOCOLS, lowerDays: lowerDays, suggestCardioDay: suggestCardioDay, cardioWarnings: cardioWarnings, dayDistance: dayDistance,
     EQUIPMENT: EQUIPMENT, requiredEquipment: requiredEquipment, isAvailable: isAvailable,
     pickAlternative: pickAlternative, applyConstraints: applyConstraints,

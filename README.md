@@ -70,6 +70,14 @@ Ejemplos reales del motor:
 | Solo mancuernas y banco | Puente a una pierna, RDL con mancuernas, press con mancuernas, pájaros, fondos en banco… |
 | Sin material | Flexiones, fondos, sentadilla a una pierna, almeja, puente a una pierna, sissy squat… |
 
+## Ciclo y autorregulación
+
+Opcional, por perfil. Se activa en *Ajustes → Ciclo y autorregulación*: fecha del último periodo, duración del ciclo y del sangrado. La app calcula el día y la fase, y **en los días de sangrado pregunta cómo va la fuerza** (normal / algo baja / muy baja, más dolor y descanso).
+
+Con esa respuesta ajusta **solo la sesión de hoy**: hasta −8 % de carga y una o dos series menos, con techo de −15 % y −2 series. No toca el programa ni la progresión, y la carga base del bloque se queda como estaba.
+
+El criterio viene de que el efecto del ciclo sobre la fuerza es de trivial a pequeño y muy individual (McNulty et al., 2020), con más síntomas en la fase menstrual. Por eso no se asume un patrón fijo: se pregunta. A partir de 4 registros la app empieza a mostrar los días en que sueles marcar fuerza baja.
+
 ## Asistente (tu clave de OpenAI)
 
 En **Ajustes → Asistente** pegas tu clave (`sk-…`). Se guarda **solo en ese navegador**, nunca se incluye en las copias `.json` y las llamadas van directas a `api.openai.com`: no pasa por ningún servidor intermedio.
@@ -177,9 +185,9 @@ Verifica manifiesto, iconos, instalabilidad, service worker y que la app abre si
 │   ├── styles.css
 │   ├── engine.js               lógica pura: volumen, tonelaje, progresión, fases
 │   └── app.js                  interfaz
-├── tests/engine.test.mjs       19 pruebas del motor
+├── tests/engine.test.mjs       25 pruebas del motor
 ├── tools/
-│   ├── e2e.mjs                 31 pruebas de interacción en Chrome real
+│   ├── e2e.mjs                 37 pruebas de interacción en Chrome real
 │   ├── shot.mjs                capturas con emulación de móvil
 │   ├── pdf.sh                  genera el PDF
 │   ├── icons.py                regenera los iconos
@@ -196,8 +204,8 @@ Requiere Node ≥ 20 (sin dependencias).
 ```bash
 npm run build   # regenera index.html y sw.js desde src/
 npm run pack    # genera public/ (app + PWA + PDF) para desplegar
-npm test        # 19 pruebas del motor
-npm run e2e     # 31 pruebas de interacción (necesita Chrome)
+npm test        # 25 pruebas del motor
+npm run e2e     # 37 pruebas de interacción (necesita Chrome)
 npm run pdf     # regenera cuaderno-bloque.pdf (necesita Chrome)
 npm run pwa <url>  # comprueba manifiesto, SW y offline contra una URL
 ```

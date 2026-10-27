@@ -192,13 +192,20 @@
     if (!L.optional) L.optional = {};
     return L;
   }
+  function adjustedSets(slot, L) {
+    const d = (L && L.setDelta) || 0;
+    return Math.max(2, slot.sets + d);
+  }
+
   function entryFor(dateISO, exId, slot) {
     const L = logFor(dateISO);
-    if (!L.entries[exId]) L.entries[exId] = { sets: [], load: S.loads[exId] || 0, adjusted: 0 };
+    const mod = 1 + ((L.modifier || 0) / 100);
+    if (!L.entries[exId]) L.entries[exId] = { sets: [], load: Math.round((S.loads[exId] || 0) * mod * 2) / 2, adjusted: 0 };
     const e = L.entries[exId];
     if (!e.sets) e.sets = [];
     if (slot) {
-      while (e.sets.length < slot.sets) e.sets.push({});
+      const n = adjustedSets(slot, L);
+      while (e.sets.length < n) e.sets.push({});
     }
     return e;
   }
@@ -357,6 +364,8 @@
 
     /* preparación */
     wrap.appendChild(readinessCard(date, L));
+    const cyc = cycleCard(date, L);
+    if (cyc) wrap.appendChild(cyc);
 
     if (phaseNow().id === 'cal') {
       wrap.appendChild(el('div', { class: 'banner good' },
@@ -375,7 +384,7 @@
 
     /* progreso + acciones */
     const done = countDoneSets(L);
-    const totalSets = day.slots.reduce((a, s) => a + (s.optional && !L.optional[idxOfSlot(day, s)] ? 0 : s.sets), 0);
+    const totalSets = day.slots.reduce((a, s) => a + (s.optional && !L.optional[idxOfSlot(day, s)] ? 0 : adjustedSets(s, L)), 0);
     const foot = el('div', { class: 'card' });
     const line = el('div', { class: 'row between' });
     line.appendChild(el('div', { class: 'row', style: { gap: '10px' } },
@@ -440,6 +449,71 @@
     return card;
   }
 
+  function cycleCard(date, L) {
+    if (!S.cycle || !S.cycle.enabled) return null;
+    const info = CE.cycleInfo(S.cycle, date);
+    if (!info) return null;
+    const check = L.cycle || {};
+    const adj = CE.cycleAdjustment(info, check, L.readiness);
+    const card = el('div', { class: 'card tight' });
+
+    const head = el('div', { class: 'row between' });
+    head.appendChild(el('div', { class: 'row' },
+      el('span', { class: 'chip' + (info.phase === 'menstrual' ? ' red' : '') , text: 'Día ' + info.day + ' · ' + CE.CYCLE_PHASE_LABEL[info.phase] }),
+      info.daysToNext <= 3 ? el('span', { class: 'tiny muted', text: 'próximo periodo en ' + info.daysToNext + ' días' }) : null
+    ));
+    card.appendChild(head);
+
+    if (info.day <= S.cycle.periodLength + 2 || L.cycle) {
+      card.appendChild(el('p', { class: 'hint', style: { margin: '8px 0 6px' }, text: '¿Cómo va la fuerza hoy? Con esto se ajusta la sesión, no el programa.' }));
+      const row = el('div', { class: 'row tight' });
+      [['Normal', 0], ['Algo baja', 1], ['Muy baja', 2]].forEach(([label, v]) => {
+        row.appendChild(el('button', {
+          class: 'btn sm' + (check.strength === v ? ' primary' : ''),
+          text: label,
+          onclick: () => setCycleCheck(date, L, { strength: check.strength === v ? undefined : v })
+        }));
+      });
+      card.appendChild(row);
+      const row2 = el('div', { class: 'row tight', style: { marginTop: '8px' } });
+      row2.appendChild(el('button', {
+        class: 'btn sm' + (check.pain ? ' primary' : ' ghost'), text: 'Dolor / malestar',
+        onclick: () => setCycleCheck(date, L, { pain: !check.pain })
+      }));
+      row2.appendChild(el('button', {
+        class: 'btn sm' + (check.sleep === false ? ' primary' : ' ghost'), text: 'Dormí mal',
+        onclick: () => setCycleCheck(date, L, { sleep: check.sleep === false ? true : false })
+      }));
+      card.appendChild(row2);
+    }
+
+    if (adj.active) {
+      card.appendChild(el('div', { class: 'banner warn', style: { marginTop: '10px' } },
+        el('b', { text: 'Sesión ajustada: ' + adj.loadPct + ' % y ' + (adj.setDelta < 0 ? adj.setDelta + ' series' : 'mismas series') + '. ' }),
+        el('span', { text: adj.reasons.join(', ') + '. La carga base del bloque no cambia.' })
+      ));
+    } else if (L.cycle && typeof check.strength === 'number') {
+      card.appendChild(el('div', { class: 'banner good', style: { marginTop: '10px' } }, el('span', { text: 'Sin ajuste: entrenas con el plan normal.' })));
+    }
+    return card;
+  }
+
+  function setCycleCheck(date, L, patch) {
+    L.cycle = Object.assign({}, L.cycle, patch);
+    const info = CE.cycleInfo(S.cycle, date);
+    const adj = CE.cycleAdjustment(info, L.cycle, L.readiness);
+    L.modifier = adj.loadPct;
+    L.setDelta = adj.setDelta;
+    Object.keys(L.entries || {}).forEach((exId) => {
+      const e = L.entries[exId];
+      const base = Math.round((S.loads[exId] || 0) * (1 + adj.loadPct / 100) * 2) / 2;
+      (e.sets || []).forEach((st) => { if (!st.done) st.load = base; });
+      e.load = base;
+    });
+    save(true); render();
+    toast(adj.active ? 'Sesión ajustada al ' + (100 + adj.loadPct) + ' %' : 'Sin ajuste');
+  }
+
   function exerciseCard(date, day, slot, idx, L) {
     const ex = CE.exOf(slot.ex, EX);
     const isOptionalOff = slot.optional && !L.optional[idx];
@@ -452,7 +526,9 @@
     const head = el('div', { class: 'ex-head' });
     const title = el('div', { class: 'ex-title' });
     title.appendChild(el('b', {}, ex.name, slot.optional ? el('span', { class: 'pill opt', style: { marginLeft: '8px' }, text: 'opcional' }) : null));
-    title.appendChild(el('span', { class: 'spec', text: slot.sets + ' × ' + slot.reps[0] + '–' + slot.reps[1] + ' · RIR ' + slot.rir + ' · ' + fmtRest(slot.rest || ex.rest) + ' descanso' }));
+    const nSets = adjustedSets(slot, L);
+    title.appendChild(el('span', { class: 'spec', text: nSets + ' × ' + slot.reps[0] + '–' + slot.reps[1] + ' · RIR ' + slot.rir + ' · ' + fmtRest(slot.rest || ex.rest) + ' descanso' }));
+    if (nSets !== slot.sets) title.appendChild(el('span', { class: 'pill', text: 'hoy ' + nSets + ' series' }));
     if (slot.flagged === 'sin-equipo') {
       title.appendChild(el('span', { class: 'pill', style: { borderColor: 'var(--amber)', color: 'var(--amber)' }, text: 'necesita ' + CE.requiredEquipment(ex).filter((t) => t !== 'peso_corporal').map((t) => ((CE.EQUIPMENT.filter((e) => e.id === t)[0] || {}).label || t).toLowerCase()).join(' o ') }));
     }
@@ -489,7 +565,7 @@
       el('span', { text: '#' }), el('span', { text: 'kg' }), el('span', { text: 'reps' }), el('span', { text: 'rir' }), el('span', { text: '' })
     ));
     const sets = el('div', { class: 'sets' });
-    for (let i = 0; i < slot.sets; i++) {
+    for (let i = 0; i < nSets; i++) {
       const st = entry.sets[i] || (entry.sets[i] = {});
       const row = el('div', { class: 'set-row' });
       row.appendChild(el('span', { class: 'idx', text: String(i + 1) }));
@@ -1495,6 +1571,10 @@
     });
     doc.appendChild(el('p', { class: 'note', text: 'Si el déficit se extiende a 15 semanas, el bloque se repite desde la semana 1 con las cargas alcanzadas como nuevo punto de partida, o se inserta una descarga extra en la 13 si la preparación media cae por debajo de 55 o el semáforo sale rojo dos semanas seguidas.' }));
 
+    doc.appendChild(el('h2', { text: 'Ciclo y autorregulación' }));
+    doc.appendChild(el('p', { text: 'La fuerza no cambia igual para todas a lo largo del ciclo: el meta-análisis de McNulty y colaboradores (2020) encuentra efectos de triviales a pequeños, con más síntomas en la fase menstrual y peor tolerancia al esfuerzo en la lútea. Por eso el plan no asume un patrón: pregunta cada día de sangrado cómo está la fuerza y ajusta esa sesión, sin tocar el programa ni la progresión.' }));
+    doc.appendChild(el('p', { class: 'note', text: 'El ajuste tiene techo: nunca más del 15 % de carga ni más de dos series. Si el registro muestra varios días seguidos de fuerza muy baja, la decisión correcta es descansar o adelantar la descarga, no seguir recortando series.' }));
+
     doc.appendChild(el('h2', { text: 'Cardio y pasos' }));
     doc.appendChild(el('p', { text: 'La interferencia entre cardio y fuerza depende de la dosis y de la proximidad, no de la existencia del cardio: aparece sobre todo con volumen alto de resistencia, en el mismo músculo y sin separación suficiente. Por eso la base son los pasos (' + nf0.format((S.cardio && S.cardio.steps) || 8000) + ' al día) y el HIIT va ' + (S.cardio && S.cardio.hiit ? 'una o dos veces por semana' : 'fuera del plan') + ', separado del tren inferior.' }));
     doc.appendChild(el('p', { class: 'note', text: 'Regla práctica: HIIT en un día sin piernas o al final de una sesión de tren superior, con al menos 6 horas desde que terminaste; y nunca la tarde anterior a sentadilla o peso muerto. Los intervalos cortos afectan poco la señal de síntesis proteica, que dura entre 24 y 48 horas después de entrenar; el problema real es la recuperación acumulada en déficit.' }));
@@ -1661,6 +1741,7 @@
 
     wrap.appendChild(profileCard());
     wrap.appendChild(equipmentCard());
+    wrap.appendChild(cycleCardSettings());
     wrap.appendChild(cardioCard());
     wrap.appendChild(prefsCard());
     wrap.appendChild(aiCard());
@@ -1770,6 +1851,67 @@
       }),
       el('span', { class: 'tiny muted', text: 'vuelve al reparto original del bloque' })
     ));
+    return card;
+  }
+
+  function cycleCardSettings() {
+    const c = S.cycle || { enabled: false };
+    const card = el('div', { class: 'card' });
+    card.appendChild(el('div', { class: 'card-title' },
+      el('h2', { text: 'Ciclo y autorregulación' }),
+      el('span', { class: 'meta', text: c.enabled ? 'activo' : 'desactivado' })
+    ));
+    card.appendChild(el('p', { class: 'hint', text: 'Si lo activas, la app te pregunta por la fuerza en los días de sangrado y ajusta la sesión de ese día (−5 a −8 % y una o dos series menos). No cambia el programa ni la progresión: solo lo que haces hoy.' }));
+
+    const toggle = el('div', { class: 'seg' });
+    [['Sí', true], ['No', false]].forEach(([label, val]) => {
+      toggle.appendChild(el('button', {
+        type: 'button', text: label, 'aria-pressed': !!c.enabled === val ? 'true' : 'false',
+        onclick: () => {
+          S.cycle = Object.assign({}, S.cycle, { enabled: val });
+          save(true); render();
+          toast(val ? 'Ciclo activado' : 'Ciclo desactivado');
+        }
+      }));
+    });
+    card.appendChild(el('div', { class: 'row' }, el('span', { class: 'tiny muted', text: 'Registrar ciclo' }), toggle));
+
+    if (c.enabled) {
+      const last = el('input', { type: 'date', value: c.lastStart || '' });
+      const len = el('input', { type: 'number', min: '21', max: '45', value: c.cycleLength || 28 });
+      const period = el('input', { type: 'number', min: '2', max: '10', value: c.periodLength || 5 });
+      card.appendChild(el('div', { class: 'grid three', style: { marginTop: '10px' } },
+        el('label', { class: 'fld' }, 'Último periodo (primer día)', last),
+        el('label', { class: 'fld' }, 'Duración del ciclo', len),
+        el('label', { class: 'fld' }, 'Días de sangrado', period)
+      ));
+      card.appendChild(el('div', { class: 'row', style: { marginTop: '8px' } },
+        el('button', {
+          class: 'btn sm', text: 'Guardar',
+          onclick: () => {
+            S.cycle = Object.assign({}, S.cycle, {
+              lastStart: last.value || S.cycle.lastStart,
+              cycleLength: num(len.value) || 28,
+              periodLength: num(period.value) || 5
+            });
+            save(true); render(); toast('Ciclo guardado');
+          }
+        })
+      ));
+      const info = CE.cycleInfo(S.cycle, todayISO());
+      if (info) {
+        card.appendChild(el('div', { class: 'banner', style: { marginTop: '10px' } },
+          el('b', { text: 'Hoy: día ' + info.day + ' · ' + CE.CYCLE_PHASE_LABEL[info.phase] + '. ' }),
+          el('span', { text: 'Próximo periodo el ' + shortDate(info.nextStart) + ' (' + info.daysToNext + ' días).' })
+        ));
+      }
+      const pat = CE.cyclePattern(S.logs, S.cycle);
+      if (pat) {
+        card.appendChild(el('p', { class: 'tiny muted', style: { marginTop: '8px' }, text: 'Con ' + pat.samples + ' registros: los días ' + pat.weakest.map((w) => w.day).join(', ') + ' son los que más veces marcas fuerza baja.' }));
+      } else {
+        card.appendChild(el('p', { class: 'tiny muted', style: { marginTop: '8px' }, text: 'A partir de 4 registros la app empieza a ver tu patrón y a sugerir el ajuste antes de que lo pidas.' }));
+      }
+    }
     return card;
   }
 
