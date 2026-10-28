@@ -50,8 +50,20 @@
   const MUSCLE_LABEL = {};
   MUSCLES.forEach(m => { MUSCLE_LABEL[m.id] = m.label; });
 
-  function rangeOf(id) { return RANGE[id] || [0, 0]; }
-  function aimOf(id) { return AIM[id] || 0; }
+  /* El volumen objetivo escala con la experiencia. En déficit, un avanzado
+     tolera algo más en sus músculos prioritarios, no en todos. */
+  const EXP_VOLUME = { principiante: 0.85, intermedio: 1, avanzado: 1.15 };
+  function volumeFactor(experience) { return EXP_VOLUME[experience] || 1; }
+
+  function rangeOf(id, experience) {
+    const r = RANGE[id] || [0, 0];
+    const f = volumeFactor(experience);
+    if (f === 1) return r;
+    return [Math.max(1, Math.round(r[0] * f)), Math.max(1, Math.round(r[1] * f))];
+  }
+  function aimOf(id, experience) {
+    return Math.round((AIM[id] || 0) * volumeFactor(experience) * 10) / 10;
+  }
 
   /* ------------------------------------------------------------------ *
    * 2. Biblioteca de ejercicios
@@ -764,18 +776,24 @@
      el deltoides se muestra como una sola fila (suma de sus tres porciones). */
   const VOLUME_ORDER = ['glute', 'ham', 'back', 'deltoids', 'quad', 'chest', 'calf', 'biceps', 'triceps', 'glute_med'];
 
-  function aggregateVolume(vol) {
-    return VOLUME_ORDER.map(id => {
+  function aggregateVolume(vol, experience) {
+    const f = volumeFactor(experience);
+    return VOLUME_ORDER.map(function (id) {
       if (id === 'deltoids') {
         const total = (vol.delt_front ? vol.delt_front.total : 0) + (vol.delt_side ? vol.delt_side.total : 0) + (vol.delt_rear ? vol.delt_rear.total : 0);
-        return { id: 'deltoids', label: 'Deltoides', short: 'Deltoides', total: round1(total), range: [12, 16], aim: 16 };
+        return { id: 'deltoids', label: 'Deltoides', short: 'Deltoides', total: round1(total), range: [Math.round(12 * f), Math.round(16 * f)], aim: Math.round(16 * f) };
       }
-      return { id: id, label: MUSCLE_LABEL[id] || id, short: (MUSCLES.filter((m) => m.id === id)[0] || {}).short || id, total: round1(vol[id] ? vol[id].total : 0), range: rangeOf(id), aim: aimOf(id) };
+      const meta = MUSCLES.filter(function (m) { return m.id === id; })[0] || {};
+      return {
+        id: id, label: MUSCLE_LABEL[id] || id, short: meta.short || id,
+        total: round1(vol[id] ? vol[id].total : 0),
+        range: rangeOf(id, experience), aim: aimOf(id, experience)
+      };
     });
   }
 
-  function volumeRows(vol) {
-    return aggregateVolume(vol).map(r => {
+  function volumeRows(vol, experience) {
+    return aggregateVolume(vol, experience).map(r => {
       const lo = r.range[0], hi = r.range[1];
       let status = 'ok';
       if (r.total < lo - 0.6) status = 'low';
@@ -798,8 +816,8 @@
 
   /* Reparte/recorta series hasta acercarse al objetivo semanal, respetando
      el techo por sesión y protegiendo los músculos prioritarios. */
-  function fitToTarget(program, exMap) {
-    const target = totalTargetFor(program.n);
+  function fitToTarget(program, exMap, opts) {
+    const target = Math.round(totalTargetFor(program.n) * volumeFactor((opts || {}).experience));
     const moves = [];
     let guard = 0;
     while (countSets(program) > target && guard++ < 200) {
@@ -844,13 +862,14 @@
     opts = opts || {};
     const maxIter = opts.iterations || 12;
     const moves = [];
+    const exp = opts.experience;
     for (let it = 0; it < maxIter; it++) {
       const vol = volumeOf(program, exMap);
       const deficits = [], surpluses = [];
       MUSCLES.forEach(m => {
         const total = vol[m.id] ? vol[m.id].total : 0;
-        const aim = aimOf(m.id);
-        const [lo, hi] = rangeOf(m.id);
+        const aim = aimOf(m.id, exp);
+        const [lo, hi] = rangeOf(m.id, exp);
         if (aim && total < Math.min(aim, lo) * 0.95) deficits.push({ id: m.id, gap: Math.min(aim, lo) - total });
         if (total > hi + 0.5) surpluses.push({ id: m.id, over: total - hi });
       });
@@ -908,7 +927,7 @@
     applyOverrides(tpl, opts.overrides);
     applySwaps(tpl, opts.swaps);
     applyConstraints(tpl, { exMap: exMap, equipment: opts.equipment, prefs: opts.prefs });
-    if (opts.fit !== false) { fitToTarget(tpl, exMap); rebalance(tpl, exMap); }
+    if (opts.fit !== false) { fitToTarget(tpl, exMap, opts); rebalance(tpl, exMap, { experience: opts.experience }); }
     if (opts.phase && opts.phase.volume && opts.phase.volume !== 1) applyVolume(tpl, opts.phase.volume);
     return tpl;
   }
@@ -1437,14 +1456,22 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
           if (L.readiness.score < 55) red += 1;
         }
       }
-      weeks.push({ start: toISODate(start), avg: n ? Math.round(sum / n) : null, n: n, red: red });
+      let heavy = 0;
+      for (let d = 0; d < 7; d++) {
+        const L = state.logs[toISODate(addDays(start, d))];
+        if (L && L.fatigue === 'high') heavy += 1;
+      }
+      weeks.push({ start: toISODate(start), avg: n ? Math.round(sum / n) : null, n: n, red: red, heavy: heavy });
     }
     const cur = weeks[0], prev = weeks[1];
     const lowTwo = cur.avg != null && prev.avg != null && cur.avg < 55 && prev.avg < 55;
     const twoRed = cur.red >= 2;
+    const tooHeavy = cur.heavy >= 2;
     return {
-      need: lowTwo || twoRed,
-      reason: twoRed ? 'dos sesiones en rojo esta semana' : lowTwo ? 'dos semanas con preparación media por debajo de 55' : '',
+      need: lowTwo || twoRed || tooHeavy,
+      reason: tooHeavy ? 'dos sesiones seguidas te dejaron destrozado'
+        : twoRed ? 'dos sesiones en rojo esta semana'
+        : lowTwo ? 'dos semanas con preparación media por debajo de 55' : '',
       avg: cur.avg, prevAvg: prev.avg, weeks: weeks
     };
   }
@@ -1554,8 +1581,14 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     const pctDone = plannedSets ? Math.round((doneSets / plannedSets) * 100) : 0;
     const tonDelta = prevTon ? (doneTon - prevTon) / prevTon : null;
 
+    const fat = { low: 0, ok: 0, high: 0 };
+    days.forEach(function (d) {
+      const L = state.logs[d];
+      if (L && L.fatigue && fat[L.fatigue] != null) fat[L.fatigue] += 1;
+    });
+
     return {
-      weekStart: toISODate(ws), weekNumber: weekNo, phase: phase,
+      weekStart: toISODate(ws), weekNumber: weekNo, phase: phase, fatigue: fat,
       sessions: { planned: plannedSessions, done: doneSessions },
       sets: { planned: plannedSets, done: doneSets, pct: pctDone },
       tonnage: { planned: Math.round(plannedTon), done: Math.round(doneTon), prev: Math.round(prevTon), delta: tonDelta },
@@ -1575,6 +1608,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     lines.push('Tonelaje: ' + r.tonnage.done + ' kg' + (r.tonnage.delta != null ? ' (' + (r.tonnage.delta >= 0 ? '+' : '') + Math.round(r.tonnage.delta * 100) + ' % vs semana anterior)' : ''));
     if (r.readiness.avg != null) lines.push('Preparación media: ' + r.readiness.avg + '/100');
     if (r.cardio.planned) lines.push('Cardio: ' + r.cardio.done + '/' + r.cardio.planned);
+    if (r.fatigue && (r.fatigue.low + r.fatigue.ok + r.fatigue.high) > 0) lines.push('Fatiga percibida: ' + r.fatigue.low + ' sobró · ' + r.fatigue.ok + ' justa · ' + r.fatigue.high + ' destrozado');
     if (r.weight) lines.push('Peso: ' + r.weight.now + ' kg' + (r.weight.prev ? ' (' + (r.weight.now - r.weight.prev >= 0 ? '+' : '') + round1(r.weight.now - r.weight.prev) + ' kg)' : ''));
     const low = r.volume.filter(function (v) { return v.status === 'low'; });
     if (low.length) lines.push('Por debajo del rango: ' + low.map(function (v) { return v.label + ' ' + v.total; }).join(', '));
@@ -1901,7 +1935,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     e1rm: e1rm, exerciseHistory: exerciseHistory, stagnation: stagnation, projectBlock: projectBlock,
     weekReport: weekReport, reportText: reportText, bestE1rm: bestE1rm,
     deloadSignal: deloadSignal, phaseFor: phaseFor, isExtraDeload: isExtraDeload,
-    cycleAverages: cycleAverages,
+    cycleAverages: cycleAverages, volumeFactor: volumeFactor, EXP_VOLUME: EXP_VOLUME,
     platesFor: platesFor, platesLabel: platesLabel, warmupRamp: warmupRamp, isBarbellExercise: isBarbellExercise, BAR_KG: BAR_KG,
     loadStep: loadStep, nearestLoadable: nearestLoadable,
     swapOptions: swapOptions, sessionRedundancy: sessionRedundancy, movementFamily: movementFamily,

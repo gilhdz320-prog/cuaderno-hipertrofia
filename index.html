@@ -780,8 +780,20 @@ window.CUADERNO_CONFIG = {
   const MUSCLE_LABEL = {};
   MUSCLES.forEach(m => { MUSCLE_LABEL[m.id] = m.label; });
 
-  function rangeOf(id) { return RANGE[id] || [0, 0]; }
-  function aimOf(id) { return AIM[id] || 0; }
+  /* El volumen objetivo escala con la experiencia. En déficit, un avanzado
+     tolera algo más en sus músculos prioritarios, no en todos. */
+  const EXP_VOLUME = { principiante: 0.85, intermedio: 1, avanzado: 1.15 };
+  function volumeFactor(experience) { return EXP_VOLUME[experience] || 1; }
+
+  function rangeOf(id, experience) {
+    const r = RANGE[id] || [0, 0];
+    const f = volumeFactor(experience);
+    if (f === 1) return r;
+    return [Math.max(1, Math.round(r[0] * f)), Math.max(1, Math.round(r[1] * f))];
+  }
+  function aimOf(id, experience) {
+    return Math.round((AIM[id] || 0) * volumeFactor(experience) * 10) / 10;
+  }
 
   /* ------------------------------------------------------------------ *
    * 2. Biblioteca de ejercicios
@@ -1494,18 +1506,24 @@ window.CUADERNO_CONFIG = {
      el deltoides se muestra como una sola fila (suma de sus tres porciones). */
   const VOLUME_ORDER = ['glute', 'ham', 'back', 'deltoids', 'quad', 'chest', 'calf', 'biceps', 'triceps', 'glute_med'];
 
-  function aggregateVolume(vol) {
-    return VOLUME_ORDER.map(id => {
+  function aggregateVolume(vol, experience) {
+    const f = volumeFactor(experience);
+    return VOLUME_ORDER.map(function (id) {
       if (id === 'deltoids') {
         const total = (vol.delt_front ? vol.delt_front.total : 0) + (vol.delt_side ? vol.delt_side.total : 0) + (vol.delt_rear ? vol.delt_rear.total : 0);
-        return { id: 'deltoids', label: 'Deltoides', short: 'Deltoides', total: round1(total), range: [12, 16], aim: 16 };
+        return { id: 'deltoids', label: 'Deltoides', short: 'Deltoides', total: round1(total), range: [Math.round(12 * f), Math.round(16 * f)], aim: Math.round(16 * f) };
       }
-      return { id: id, label: MUSCLE_LABEL[id] || id, short: (MUSCLES.filter((m) => m.id === id)[0] || {}).short || id, total: round1(vol[id] ? vol[id].total : 0), range: rangeOf(id), aim: aimOf(id) };
+      const meta = MUSCLES.filter(function (m) { return m.id === id; })[0] || {};
+      return {
+        id: id, label: MUSCLE_LABEL[id] || id, short: meta.short || id,
+        total: round1(vol[id] ? vol[id].total : 0),
+        range: rangeOf(id, experience), aim: aimOf(id, experience)
+      };
     });
   }
 
-  function volumeRows(vol) {
-    return aggregateVolume(vol).map(r => {
+  function volumeRows(vol, experience) {
+    return aggregateVolume(vol, experience).map(r => {
       const lo = r.range[0], hi = r.range[1];
       let status = 'ok';
       if (r.total < lo - 0.6) status = 'low';
@@ -1528,8 +1546,8 @@ window.CUADERNO_CONFIG = {
 
   /* Reparte/recorta series hasta acercarse al objetivo semanal, respetando
      el techo por sesión y protegiendo los músculos prioritarios. */
-  function fitToTarget(program, exMap) {
-    const target = totalTargetFor(program.n);
+  function fitToTarget(program, exMap, opts) {
+    const target = Math.round(totalTargetFor(program.n) * volumeFactor((opts || {}).experience));
     const moves = [];
     let guard = 0;
     while (countSets(program) > target && guard++ < 200) {
@@ -1574,13 +1592,14 @@ window.CUADERNO_CONFIG = {
     opts = opts || {};
     const maxIter = opts.iterations || 12;
     const moves = [];
+    const exp = opts.experience;
     for (let it = 0; it < maxIter; it++) {
       const vol = volumeOf(program, exMap);
       const deficits = [], surpluses = [];
       MUSCLES.forEach(m => {
         const total = vol[m.id] ? vol[m.id].total : 0;
-        const aim = aimOf(m.id);
-        const [lo, hi] = rangeOf(m.id);
+        const aim = aimOf(m.id, exp);
+        const [lo, hi] = rangeOf(m.id, exp);
         if (aim && total < Math.min(aim, lo) * 0.95) deficits.push({ id: m.id, gap: Math.min(aim, lo) - total });
         if (total > hi + 0.5) surpluses.push({ id: m.id, over: total - hi });
       });
@@ -1638,7 +1657,7 @@ window.CUADERNO_CONFIG = {
     applyOverrides(tpl, opts.overrides);
     applySwaps(tpl, opts.swaps);
     applyConstraints(tpl, { exMap: exMap, equipment: opts.equipment, prefs: opts.prefs });
-    if (opts.fit !== false) { fitToTarget(tpl, exMap); rebalance(tpl, exMap); }
+    if (opts.fit !== false) { fitToTarget(tpl, exMap, opts); rebalance(tpl, exMap, { experience: opts.experience }); }
     if (opts.phase && opts.phase.volume && opts.phase.volume !== 1) applyVolume(tpl, opts.phase.volume);
     return tpl;
   }
@@ -2167,14 +2186,22 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
           if (L.readiness.score < 55) red += 1;
         }
       }
-      weeks.push({ start: toISODate(start), avg: n ? Math.round(sum / n) : null, n: n, red: red });
+      let heavy = 0;
+      for (let d = 0; d < 7; d++) {
+        const L = state.logs[toISODate(addDays(start, d))];
+        if (L && L.fatigue === 'high') heavy += 1;
+      }
+      weeks.push({ start: toISODate(start), avg: n ? Math.round(sum / n) : null, n: n, red: red, heavy: heavy });
     }
     const cur = weeks[0], prev = weeks[1];
     const lowTwo = cur.avg != null && prev.avg != null && cur.avg < 55 && prev.avg < 55;
     const twoRed = cur.red >= 2;
+    const tooHeavy = cur.heavy >= 2;
     return {
-      need: lowTwo || twoRed,
-      reason: twoRed ? 'dos sesiones en rojo esta semana' : lowTwo ? 'dos semanas con preparación media por debajo de 55' : '',
+      need: lowTwo || twoRed || tooHeavy,
+      reason: tooHeavy ? 'dos sesiones seguidas te dejaron destrozado'
+        : twoRed ? 'dos sesiones en rojo esta semana'
+        : lowTwo ? 'dos semanas con preparación media por debajo de 55' : '',
       avg: cur.avg, prevAvg: prev.avg, weeks: weeks
     };
   }
@@ -2284,8 +2311,14 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     const pctDone = plannedSets ? Math.round((doneSets / plannedSets) * 100) : 0;
     const tonDelta = prevTon ? (doneTon - prevTon) / prevTon : null;
 
+    const fat = { low: 0, ok: 0, high: 0 };
+    days.forEach(function (d) {
+      const L = state.logs[d];
+      if (L && L.fatigue && fat[L.fatigue] != null) fat[L.fatigue] += 1;
+    });
+
     return {
-      weekStart: toISODate(ws), weekNumber: weekNo, phase: phase,
+      weekStart: toISODate(ws), weekNumber: weekNo, phase: phase, fatigue: fat,
       sessions: { planned: plannedSessions, done: doneSessions },
       sets: { planned: plannedSets, done: doneSets, pct: pctDone },
       tonnage: { planned: Math.round(plannedTon), done: Math.round(doneTon), prev: Math.round(prevTon), delta: tonDelta },
@@ -2305,6 +2338,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     lines.push('Tonelaje: ' + r.tonnage.done + ' kg' + (r.tonnage.delta != null ? ' (' + (r.tonnage.delta >= 0 ? '+' : '') + Math.round(r.tonnage.delta * 100) + ' % vs semana anterior)' : ''));
     if (r.readiness.avg != null) lines.push('Preparación media: ' + r.readiness.avg + '/100');
     if (r.cardio.planned) lines.push('Cardio: ' + r.cardio.done + '/' + r.cardio.planned);
+    if (r.fatigue && (r.fatigue.low + r.fatigue.ok + r.fatigue.high) > 0) lines.push('Fatiga percibida: ' + r.fatigue.low + ' sobró · ' + r.fatigue.ok + ' justa · ' + r.fatigue.high + ' destrozado');
     if (r.weight) lines.push('Peso: ' + r.weight.now + ' kg' + (r.weight.prev ? ' (' + (r.weight.now - r.weight.prev >= 0 ? '+' : '') + round1(r.weight.now - r.weight.prev) + ' kg)' : ''));
     const low = r.volume.filter(function (v) { return v.status === 'low'; });
     if (low.length) lines.push('Por debajo del rango: ' + low.map(function (v) { return v.label + ' ' + v.total; }).join(', '));
@@ -2631,7 +2665,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     e1rm: e1rm, exerciseHistory: exerciseHistory, stagnation: stagnation, projectBlock: projectBlock,
     weekReport: weekReport, reportText: reportText, bestE1rm: bestE1rm,
     deloadSignal: deloadSignal, phaseFor: phaseFor, isExtraDeload: isExtraDeload,
-    cycleAverages: cycleAverages,
+    cycleAverages: cycleAverages, volumeFactor: volumeFactor, EXP_VOLUME: EXP_VOLUME,
     platesFor: platesFor, platesLabel: platesLabel, warmupRamp: warmupRamp, isBarbellExercise: isBarbellExercise, BAR_KG: BAR_KG,
     loadStep: loadStep, nearestLoadable: nearestLoadable,
     swapOptions: swapOptions, sessionRedundancy: sessionRedundancy, movementFamily: movementFamily,
@@ -3279,7 +3313,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
   function refreshDerived() {
     if (DB && DB.profiles && DB.profiles[DB.activeId]) S = DB.profiles[DB.activeId];
     EX = CE.getExMap(S.custom);
-    const base = S.program && S.program.days ? S.program : CE.buildProgram({ n: S.block.freq, split: S.block.split, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs });
+    const base = S.program && S.program.days ? S.program : CE.buildProgram({ n: S.block.freq, split: S.block.split, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs, experience: S.athlete.experience });
     S.program = base;
     const ph = CE.phaseFor(S, currentWeek());
     P = ph.volume === 1 ? base : CE.applyVolume(JSON.parse(JSON.stringify(base)), ph.volume);
@@ -4074,6 +4108,26 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     });
     body.appendChild(stats);
 
+    /* ¿cómo te dejó? */
+    const fatWrap = el('div', { style: { marginTop: '14px' } });
+    fatWrap.appendChild(el('div', { class: 'tiny muted', text: '¿Cómo te dejó la sesión?' }));
+    const fatRow = el('div', { class: 'row tight', style: { marginTop: '6px' } });
+    [['low', 'Me sobró'], ['ok', 'Justa'], ['high', 'Me destrozó']].forEach(function (pair) {
+      const b = el('button', {
+        class: 'btn sm' + (L.fatigue === pair[0] ? ' primary' : ''), text: pair[1],
+        onclick: () => {
+          L.fatigue = pair[0];
+          Array.prototype.forEach.call(fatRow.children, function (c) { c.className = 'btn sm'; });
+          b.className = 'btn sm primary';
+          save(true);
+          if (pair[0] === 'high') toast('Anotado. Si se repite, la app propondrá descarga');
+        }
+      });
+      fatRow.appendChild(b);
+    });
+    fatWrap.appendChild(fatRow);
+    body.appendChild(fatWrap);
+
     const rows = [];
     Object.keys(byEx).forEach(exId => {
       const slot = (day.slots || []).filter(s => s.ex === exId)[0] || { ex: exId, reps: [8, 10], rir: 2 };
@@ -4220,7 +4274,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
       el('h2', { text: 'Volumen semanal' }),
       el('span', { class: 'meta', text: CE.countSets(P) + ' series duras · ' + P.days.length + ' días' })
     ));
-    const rows = CE.volumeRows(CE.volumeOf(P, EX));
+    const rows = CE.volumeRows(CE.volumeOf(P, EX), S.athlete.experience);
     const max = Math.max.apply(null, rows.map(r => Math.max(r.range[1] * 1.15, r.total * 1.1)).concat([1]));
     rows.forEach(r => volCard.appendChild(volRow(r, max)));
     volCard.appendChild(el('p', { class: 'tiny muted', style: { marginTop: '10px' }, text: 'Series efectivas = directas (1) + indirectas (0,5). La banda verde es el rango del documento. El glúteo va al extremo alto a propósito; pecho y cuádriceps, al bajo.' }));
@@ -4279,7 +4333,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
 
   function applySplit(id) {
     S.block.split = id;
-    S.program = CE.buildProgram({ n: S.block.freq, split: id, exMap: EX, loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps });
+    S.program = CE.buildProgram({ n: S.block.freq, split: id, exMap: EX, loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps, experience: S.athlete.experience });
     S.block.freq = S.program.days.length;
     save(true); render();
     toast(CE.SPLITS[id].label + ': ' + S.program.days.length + ' días');
@@ -4319,7 +4373,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
 
     const n = PENDING_FREQ || S.block.freq;
     if (n !== S.block.freq) {
-      const cand = CE.buildProgram({ n: n, split: S.block.split, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs });
+      const cand = CE.buildProgram({ n: n, split: S.block.split, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs, experience: S.athlete.experience });
       const diff = CE.diffPrograms(S.program, cand, EX, S.loads);
       card.appendChild(el('hr', { class: 'sep' }));
       card.appendChild(el('h3', { text: 'Pasar a ' + n + ' días: esto es lo que cambia' }));
@@ -4378,7 +4432,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
   }
 
   function applyFrequency(n) {
-    const cand = CE.buildProgram({ n: n, split: S.block.split, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs });
+    const cand = CE.buildProgram({ n: n, split: S.block.split, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs, experience: S.athlete.experience });
     S.program = cand;
     S.block.freq = n;
     PENDING_FREQ = null;
@@ -5079,7 +5133,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
       el('th', { text: 'Músculo' }), el('th', { class: 'c', text: 'Series efectivas / semana' }), el('th', { class: 'c', text: 'Rango del plan' }), el('th', { class: 'c', text: 'Frecuencia' })
     )));
     const vtb = el('tbody');
-    CE.volumeRows(CE.volumeOf(P, EX)).forEach(r => {
+    CE.volumeRows(CE.volumeOf(P, EX), S.athlete.experience).forEach(r => {
       vtb.appendChild(el('tr', {},
         el('td', { text: r.label }),
         el('td', { class: 'c' }, el('b', { text: String(r.total) })),
@@ -5199,7 +5253,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
         DB = CE.migrateState(obj);
         S = DB.profiles[DB.activeId];
         if (!S.program || !S.program.days) {
-          S.program = CE.buildProgram({ n: S.block.freq, exMap: CE.getExMap(S.custom), loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps });
+          S.program = CE.buildProgram({ n: S.block.freq, exMap: CE.getExMap(S.custom), loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps, experience: S.athlete.experience });
         }
         save(true); refreshDerived(); render(); toast('Copia importada: ' + profileList().length + ' perfil(es)');
       } catch (e) { toast('Ese archivo no es una copia válida'); }
@@ -5310,6 +5364,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     if (r.readiness.avg != null) extra.push('Preparación ' + r.readiness.avg + '/100');
     if (r.cardio.planned) extra.push('Cardio ' + r.cardio.done + '/' + r.cardio.planned);
     if (r.weight) extra.push('Peso ' + kg(r.weight.now) + ' kg' + (r.weight.prev ? ' (' + (r.weight.now - r.weight.prev >= 0 ? '+' : '') + kg(r.weight.now - r.weight.prev) + ')' : ''));
+    if (r.fatigue && r.fatigue.high) extra.push('Destrozado ' + r.fatigue.high + '×');
     if (extra.length) body.appendChild(el('div', { class: 'row tight' }, extra.map(function (t) { return el('span', { class: 'chip', text: t }); })));
 
     if (!aiKey()) {
@@ -5525,7 +5580,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
       const sug = CE.suggestCardioDay(CE.buildProgram({ n: ONB.freq, exMap: EX, loads: S.loads, equipment: S.equipment }), EX);
       S.cardio = Object.assign({}, S.cardio, { hiit: ONB.hiit, day: sug.weekday, steps: (S.cardio && S.cardio.steps) || 8000 });
       S.cycle = Object.assign({}, S.cycle, { enabled: ONB.cycle, lastStart: ONB.lastStart || (S.cycle && S.cycle.lastStart) || '' });
-      S.program = CE.buildProgram({ n: ONB.freq, exMap: EX, loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps });
+      S.program = CE.buildProgram({ n: ONB.freq, exMap: EX, loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps, experience: S.athlete.experience });
     }
     S.onboarded = true;
     save(true);
@@ -5688,7 +5743,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
         else eq = eq.filter((id) => id !== item.id);
         S.equipment = eq;
         /* en sitio: conserva tus series, reps y ejercicios elegidos */
-        const changes = CE.applyConstraints(S.program, { exMap: EX, equipment: S.equipment, prefs: S.prefs });
+        const changes = CE.applyConstraints(S.program, { exMap: EX, equipment: S.equipment, prefs: S.prefs, experience: S.athlete.experience });
         save(true); render();
         const replaced = changes.filter((c) => c.to).length;
         toast(replaced ? 'Cambiados ' + replaced + ' ejercicios por falta de material' : 'Material actualizado');
@@ -5700,7 +5755,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
       el('button', {
         class: 'btn sm ghost', text: 'Reconstruir desde la plantilla',
         onclick: () => {
-          S.program = CE.buildProgram({ n: S.block.freq, split: S.block.split, exMap: EX, loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps });
+          S.program = CE.buildProgram({ n: S.block.freq, split: S.block.split, exMap: EX, loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps, experience: S.athlete.experience });
           save(true); render();
           toast('Programa reconstruido con tu material y tus gustos');
         }
@@ -5863,7 +5918,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     let msg = 'Preferencia guardada';
     if (value === 'dislike') {
       const before = S.program.days.reduce((n, d) => n + d.slots.filter((s) => s.ex === exId).length, 0);
-      const changes = CE.applyConstraints(S.program, { exMap: EX, equipment: S.equipment, prefs: S.prefs });
+      const changes = CE.applyConstraints(S.program, { exMap: EX, equipment: S.equipment, prefs: S.prefs, experience: S.athlete.experience });
       const replaced = changes.filter((c) => c.to && c.from === exId);
       if (replaced.length) msg = 'Cambiado por «' + replaced[0].toName + '»';
       else if (before) msg = 'No hay sustituto mejor; se queda por ahora';
@@ -6208,7 +6263,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     AI_BUSY = true; AI_RESULT = null; render();
     try {
       const weeks = CE.weeklySummary(S, EX).slice(-4);
-      const vol = CE.volumeRows(CE.volumeOf(S.program, EX));
+      const vol = CE.volumeRows(CE.volumeOf(S.program, EX), S.athlete.experience);
       const wk = CE.weekReport(S, CE.toISODate(CE.mondayOf(todayISO())), EX);
       const payload = {
         semana_actual: { sesiones: wk.sessions, series: wk.sets, tonelaje: wk.tonnage, preparacion: wk.readiness, suben: wk.progress, bajan: wk.stalled, volumen: wk.volume.filter(function (v) { return v.total > 0; }) },
@@ -6450,7 +6505,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     DB = readStore();
     S = DB.profiles[DB.activeId];
     if (!S.program || !S.program.days) {
-      S.program = CE.buildProgram({ n: S.block.freq, exMap: CE.getExMap(S.custom), loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs });
+      S.program = CE.buildProgram({ n: S.block.freq, exMap: CE.getExMap(S.custom), loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs, experience: S.athlete.experience });
     }
     if (!S.loads || !Object.keys(S.loads).length) S.loads = CE.seedLoads(S);
     refreshDerived();

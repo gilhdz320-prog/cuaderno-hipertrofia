@@ -370,7 +370,7 @@
   function refreshDerived() {
     if (DB && DB.profiles && DB.profiles[DB.activeId]) S = DB.profiles[DB.activeId];
     EX = CE.getExMap(S.custom);
-    const base = S.program && S.program.days ? S.program : CE.buildProgram({ n: S.block.freq, split: S.block.split, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs });
+    const base = S.program && S.program.days ? S.program : CE.buildProgram({ n: S.block.freq, split: S.block.split, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs, experience: S.athlete.experience });
     S.program = base;
     const ph = CE.phaseFor(S, currentWeek());
     P = ph.volume === 1 ? base : CE.applyVolume(JSON.parse(JSON.stringify(base)), ph.volume);
@@ -1165,6 +1165,26 @@
     });
     body.appendChild(stats);
 
+    /* ¿cómo te dejó? */
+    const fatWrap = el('div', { style: { marginTop: '14px' } });
+    fatWrap.appendChild(el('div', { class: 'tiny muted', text: '¿Cómo te dejó la sesión?' }));
+    const fatRow = el('div', { class: 'row tight', style: { marginTop: '6px' } });
+    [['low', 'Me sobró'], ['ok', 'Justa'], ['high', 'Me destrozó']].forEach(function (pair) {
+      const b = el('button', {
+        class: 'btn sm' + (L.fatigue === pair[0] ? ' primary' : ''), text: pair[1],
+        onclick: () => {
+          L.fatigue = pair[0];
+          Array.prototype.forEach.call(fatRow.children, function (c) { c.className = 'btn sm'; });
+          b.className = 'btn sm primary';
+          save(true);
+          if (pair[0] === 'high') toast('Anotado. Si se repite, la app propondrá descarga');
+        }
+      });
+      fatRow.appendChild(b);
+    });
+    fatWrap.appendChild(fatRow);
+    body.appendChild(fatWrap);
+
     const rows = [];
     Object.keys(byEx).forEach(exId => {
       const slot = (day.slots || []).filter(s => s.ex === exId)[0] || { ex: exId, reps: [8, 10], rir: 2 };
@@ -1311,7 +1331,7 @@
       el('h2', { text: 'Volumen semanal' }),
       el('span', { class: 'meta', text: CE.countSets(P) + ' series duras · ' + P.days.length + ' días' })
     ));
-    const rows = CE.volumeRows(CE.volumeOf(P, EX));
+    const rows = CE.volumeRows(CE.volumeOf(P, EX), S.athlete.experience);
     const max = Math.max.apply(null, rows.map(r => Math.max(r.range[1] * 1.15, r.total * 1.1)).concat([1]));
     rows.forEach(r => volCard.appendChild(volRow(r, max)));
     volCard.appendChild(el('p', { class: 'tiny muted', style: { marginTop: '10px' }, text: 'Series efectivas = directas (1) + indirectas (0,5). La banda verde es el rango del documento. El glúteo va al extremo alto a propósito; pecho y cuádriceps, al bajo.' }));
@@ -1370,7 +1390,7 @@
 
   function applySplit(id) {
     S.block.split = id;
-    S.program = CE.buildProgram({ n: S.block.freq, split: id, exMap: EX, loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps });
+    S.program = CE.buildProgram({ n: S.block.freq, split: id, exMap: EX, loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps, experience: S.athlete.experience });
     S.block.freq = S.program.days.length;
     save(true); render();
     toast(CE.SPLITS[id].label + ': ' + S.program.days.length + ' días');
@@ -1410,7 +1430,7 @@
 
     const n = PENDING_FREQ || S.block.freq;
     if (n !== S.block.freq) {
-      const cand = CE.buildProgram({ n: n, split: S.block.split, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs });
+      const cand = CE.buildProgram({ n: n, split: S.block.split, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs, experience: S.athlete.experience });
       const diff = CE.diffPrograms(S.program, cand, EX, S.loads);
       card.appendChild(el('hr', { class: 'sep' }));
       card.appendChild(el('h3', { text: 'Pasar a ' + n + ' días: esto es lo que cambia' }));
@@ -1469,7 +1489,7 @@
   }
 
   function applyFrequency(n) {
-    const cand = CE.buildProgram({ n: n, split: S.block.split, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs });
+    const cand = CE.buildProgram({ n: n, split: S.block.split, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs, experience: S.athlete.experience });
     S.program = cand;
     S.block.freq = n;
     PENDING_FREQ = null;
@@ -2170,7 +2190,7 @@
       el('th', { text: 'Músculo' }), el('th', { class: 'c', text: 'Series efectivas / semana' }), el('th', { class: 'c', text: 'Rango del plan' }), el('th', { class: 'c', text: 'Frecuencia' })
     )));
     const vtb = el('tbody');
-    CE.volumeRows(CE.volumeOf(P, EX)).forEach(r => {
+    CE.volumeRows(CE.volumeOf(P, EX), S.athlete.experience).forEach(r => {
       vtb.appendChild(el('tr', {},
         el('td', { text: r.label }),
         el('td', { class: 'c' }, el('b', { text: String(r.total) })),
@@ -2290,7 +2310,7 @@
         DB = CE.migrateState(obj);
         S = DB.profiles[DB.activeId];
         if (!S.program || !S.program.days) {
-          S.program = CE.buildProgram({ n: S.block.freq, exMap: CE.getExMap(S.custom), loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps });
+          S.program = CE.buildProgram({ n: S.block.freq, exMap: CE.getExMap(S.custom), loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps, experience: S.athlete.experience });
         }
         save(true); refreshDerived(); render(); toast('Copia importada: ' + profileList().length + ' perfil(es)');
       } catch (e) { toast('Ese archivo no es una copia válida'); }
@@ -2401,6 +2421,7 @@
     if (r.readiness.avg != null) extra.push('Preparación ' + r.readiness.avg + '/100');
     if (r.cardio.planned) extra.push('Cardio ' + r.cardio.done + '/' + r.cardio.planned);
     if (r.weight) extra.push('Peso ' + kg(r.weight.now) + ' kg' + (r.weight.prev ? ' (' + (r.weight.now - r.weight.prev >= 0 ? '+' : '') + kg(r.weight.now - r.weight.prev) + ')' : ''));
+    if (r.fatigue && r.fatigue.high) extra.push('Destrozado ' + r.fatigue.high + '×');
     if (extra.length) body.appendChild(el('div', { class: 'row tight' }, extra.map(function (t) { return el('span', { class: 'chip', text: t }); })));
 
     if (!aiKey()) {
@@ -2616,7 +2637,7 @@
       const sug = CE.suggestCardioDay(CE.buildProgram({ n: ONB.freq, exMap: EX, loads: S.loads, equipment: S.equipment }), EX);
       S.cardio = Object.assign({}, S.cardio, { hiit: ONB.hiit, day: sug.weekday, steps: (S.cardio && S.cardio.steps) || 8000 });
       S.cycle = Object.assign({}, S.cycle, { enabled: ONB.cycle, lastStart: ONB.lastStart || (S.cycle && S.cycle.lastStart) || '' });
-      S.program = CE.buildProgram({ n: ONB.freq, exMap: EX, loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps });
+      S.program = CE.buildProgram({ n: ONB.freq, exMap: EX, loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps, experience: S.athlete.experience });
     }
     S.onboarded = true;
     save(true);
@@ -2779,7 +2800,7 @@
         else eq = eq.filter((id) => id !== item.id);
         S.equipment = eq;
         /* en sitio: conserva tus series, reps y ejercicios elegidos */
-        const changes = CE.applyConstraints(S.program, { exMap: EX, equipment: S.equipment, prefs: S.prefs });
+        const changes = CE.applyConstraints(S.program, { exMap: EX, equipment: S.equipment, prefs: S.prefs, experience: S.athlete.experience });
         save(true); render();
         const replaced = changes.filter((c) => c.to).length;
         toast(replaced ? 'Cambiados ' + replaced + ' ejercicios por falta de material' : 'Material actualizado');
@@ -2791,7 +2812,7 @@
       el('button', {
         class: 'btn sm ghost', text: 'Reconstruir desde la plantilla',
         onclick: () => {
-          S.program = CE.buildProgram({ n: S.block.freq, split: S.block.split, exMap: EX, loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps });
+          S.program = CE.buildProgram({ n: S.block.freq, split: S.block.split, exMap: EX, loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps, experience: S.athlete.experience });
           save(true); render();
           toast('Programa reconstruido con tu material y tus gustos');
         }
@@ -2954,7 +2975,7 @@
     let msg = 'Preferencia guardada';
     if (value === 'dislike') {
       const before = S.program.days.reduce((n, d) => n + d.slots.filter((s) => s.ex === exId).length, 0);
-      const changes = CE.applyConstraints(S.program, { exMap: EX, equipment: S.equipment, prefs: S.prefs });
+      const changes = CE.applyConstraints(S.program, { exMap: EX, equipment: S.equipment, prefs: S.prefs, experience: S.athlete.experience });
       const replaced = changes.filter((c) => c.to && c.from === exId);
       if (replaced.length) msg = 'Cambiado por «' + replaced[0].toName + '»';
       else if (before) msg = 'No hay sustituto mejor; se queda por ahora';
@@ -3299,7 +3320,7 @@
     AI_BUSY = true; AI_RESULT = null; render();
     try {
       const weeks = CE.weeklySummary(S, EX).slice(-4);
-      const vol = CE.volumeRows(CE.volumeOf(S.program, EX));
+      const vol = CE.volumeRows(CE.volumeOf(S.program, EX), S.athlete.experience);
       const wk = CE.weekReport(S, CE.toISODate(CE.mondayOf(todayISO())), EX);
       const payload = {
         semana_actual: { sesiones: wk.sessions, series: wk.sets, tonelaje: wk.tonnage, preparacion: wk.readiness, suben: wk.progress, bajan: wk.stalled, volumen: wk.volume.filter(function (v) { return v.total > 0; }) },
@@ -3541,7 +3562,7 @@
     DB = readStore();
     S = DB.profiles[DB.activeId];
     if (!S.program || !S.program.days) {
-      S.program = CE.buildProgram({ n: S.block.freq, exMap: CE.getExMap(S.custom), loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs });
+      S.program = CE.buildProgram({ n: S.block.freq, exMap: CE.getExMap(S.custom), loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs, experience: S.athlete.experience });
     }
     if (!S.loads || !Object.keys(S.loads).length) S.loads = CE.seedLoads(S);
     refreshDerived();

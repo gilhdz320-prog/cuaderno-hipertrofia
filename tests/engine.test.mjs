@@ -399,3 +399,26 @@ test('una semana marcada como descarga extra cambia la fase', () => {
   assert.equal(f.volume, 0.5);
   assert.equal(CE.phaseFor(st, 5).id, 'acc', 'la siguiente vuelve a su fase normal');
 });
+
+test('el volumen escala con la experiencia', () => {
+  const ex = CE.getExMap([]);
+  const pr = CE.buildProgram({ n: 4, exMap: ex, experience: 'principiante' });
+  const it = CE.buildProgram({ n: 4, exMap: ex, experience: 'intermedio' });
+  const av = CE.buildProgram({ n: 4, exMap: ex, experience: 'avanzado' });
+  const g = (p) => CE.volumeOf(p, ex).glute.total;
+  assert.ok(g(pr) < g(it), 'principiante menos glúteo');
+  assert.ok(g(av) > g(it), 'avanzado más glúteo');
+  assert.ok(CE.countSets(av) > CE.countSets(it), 'avanzado más series totales');
+  const rows = CE.volumeRows(CE.volumeOf(it, ex), 'avanzado');
+  const glute = rows.filter((r) => r.id === 'glute')[0];
+  assert.equal(glute.range[0], 16, 'el rango sube con la experiencia');
+});
+
+test('la fatiga percibida dispara la señal de descarga', () => {
+  const st = CE.defaultState('2026-10-26');
+  st.logs['2026-10-27'] = { fatigue: 'high', readiness: { score: 80 } };
+  st.logs['2026-10-28'] = { fatigue: 'high', readiness: { score: 80 } };
+  const sig = CE.deloadSignal(st, '2026-10-28');
+  assert.equal(sig.need, true);
+  assert.match(sig.reason, /destrozado/);
+});
