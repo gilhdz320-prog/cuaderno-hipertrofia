@@ -1068,6 +1068,56 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
   }
 
   /* ------------------------------------------------------------------ *
+   * 8.d Historial por ejercicio y detección de estancamiento
+   * ------------------------------------------------------------------ */
+  function e1rm(load, reps) { return load * (1 + reps / 30); }
+
+  function exerciseHistory(logs, exId) {
+    return Object.keys(logs || {}).sort().map((date) => {
+      const e = logs[date] && logs[date].entries && logs[date].entries[exId];
+      if (!e || !e.sets) return null;
+      const done = e.sets.filter((x) => x && x.reps > 0 && x.load > 0);
+      if (!done.length) return null;
+      let best = 0, bestSet = null, tonnage = 0, rirSum = 0, rirN = 0;
+      done.forEach((x) => {
+        tonnage += x.reps * x.load;
+        const est = e1rm(x.load, x.reps);
+        if (est > best) { best = est; bestSet = x; }
+        if (typeof x.rir === 'number') { rirSum += x.rir; rirN++; }
+      });
+      return {
+        date: date, e1rm: Math.round(best * 10) / 10, load: bestSet.load, reps: bestSet.reps,
+        tonnage: Math.round(tonnage), sets: done.length, avgRir: rirN ? Math.round((rirSum / rirN) * 10) / 10 : null
+      };
+    }).filter(Boolean);
+  }
+
+  /* ¿Está parado? Se compara el e1RM de la última sesión con el de dos
+     sesiones antes: menos de un 1,5 % en tres sesiones es estancamiento. */
+  function stagnation(history, opts) {
+    opts = opts || {};
+    const today = opts.today || toISODate(new Date());
+    const repsTop = (opts.reps && opts.reps[1]) || null;
+    if (!history || !history.length) return { status: 'none', sessions: 0, change: 0, days: null, suggestion: 'Sin registros todavía: entrena y anota la primera serie.' };
+    const last = history[history.length - 1];
+    const days = daysBetween(last.date, today);
+    if (days > 21) return { status: 'stale', sessions: history.length, change: 0, days: days, suggestion: 'Llevas ' + days + ' días sin hacerlo. Reintrodúcelo con una carga suave o cámbialo por otra variante.' };
+    if (history.length < 3) return { status: 'few', sessions: history.length, change: 0, days: days, suggestion: 'Con tres sesiones registradas se puede valorar la progresión.' };
+
+    const ref = history[history.length - 3];
+    const change = ref.e1rm ? (last.e1rm - ref.e1rm) / ref.e1rm : 0;
+    if (change >= 0.015) return { status: 'up', sessions: history.length, change: change, days: days, suggestion: 'Progresa: ' + Math.round(change * 100) + ' % de e1RM en tres sesiones. Sigue igual.' };
+
+    if (last.avgRir != null && last.avgRir >= 3) {
+      return { status: 'flat', sessions: history.length, change: change, days: days, suggestion: 'Estancado y con RIR alto: la carga se ha quedado ligera. Sube un escalón (2,5 % tren superior, 5 % inferior).' };
+    }
+    if (repsTop && last.reps >= repsTop && last.avgRir != null && last.avgRir <= 1) {
+      return { status: 'flat', sessions: history.length, change: change, days: days, suggestion: 'Tocas el techo del rango con RIR bajo y no sube el e1RM: sube carga y vuelve al mínimo del rango.' };
+    }
+    return { status: 'flat', sessions: history.length, change: change, days: days, suggestion: 'Estancado: cambia el estímulo. Añade una serie, mueve el rango de reps arriba o cambia a la variante de al lado durante 3 semanas.' };
+  }
+
+  /* ------------------------------------------------------------------ *
    * 9. Cuestionario de preparación → 0–100 y semáforo
    * ------------------------------------------------------------------ */
   const READINESS_ITEMS = [
@@ -1191,6 +1241,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
       readiness: {},
       measurements: [],
       createdAt: new Date().toISOString(),
+      onboarded: false,
       updatedAt: new Date().toISOString()
     };
     state.loads = seedLoads(state);
@@ -1255,6 +1306,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     out.cardio = Object.assign({ steps: 8000, hiit: 1, protocol: 'hiit_10x1', day: 6 }, (p && p.cardio) || {});
     out.cardioLog = (p && p.cardioLog) || {};
     out.cycle = Object.assign({ enabled: false, lastStart: '', cycleLength: 28, periodLength: 5 }, (p && p.cycle) || {});
+    out.onboarded = !!(p && p.onboarded);
     out.id = (p && p.id) || profileId();
     out.name = (p && p.name) || out.athlete.name || 'Atleta';
     return out;
@@ -1263,7 +1315,12 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
   /* Acepta: estado v3, estado v2 de un solo perfil, o nada. */
   function migrateState(raw) {
     if (raw && raw.profiles && typeof raw.profiles === 'object' && raw.activeId) {
-      Object.keys(raw.profiles).forEach((k) => { raw.profiles[k] = normalizeProfile(raw.profiles[k]); });
+      Object.keys(raw.profiles).forEach((k) => {
+        /* los perfiles que vienen de antes ya están configurados: no se les
+           repite el alta guiada */
+        if (raw.profiles[k] && raw.profiles[k].onboarded === undefined) raw.profiles[k].onboarded = true;
+        raw.profiles[k] = normalizeProfile(raw.profiles[k]);
+      });
       if (!raw.profiles[raw.activeId]) raw.activeId = Object.keys(raw.profiles)[0];
       raw.version = 3;
       return raw;
@@ -1271,6 +1328,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     if (raw && (raw.athlete || raw.block || raw.logs)) {
       const prof = normalizeProfile(raw);
       prof.id = raw.id || profileId();
+      prof.onboarded = true; // ya tenía datos: no le repetimos el alta
       return { version: 3, activeId: prof.id, profiles: { [prof.id]: prof } };
     }
     const fresh = normalizeProfile(null);
@@ -1369,6 +1427,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     defaultState: defaultState, seedLoads: seedLoads, normalizeState: normalizeState,
     round1: round1, roundTo: roundTo, selfTest: selfTest,
     REPS_BAND: REPS_BAND, repsBandFor: repsBandFor, clampRepsFor: clampRepsFor, EXPERIENCE_FACTOR: EXPERIENCE_FACTOR,
+    e1rm: e1rm, exerciseHistory: exerciseHistory, stagnation: stagnation,
     cycleInfo: cycleInfo, cycleAdjustment: cycleAdjustment, cyclePattern: cyclePattern, CYCLE_PHASE_LABEL: CYCLE_PHASE_LABEL, daysBetween: daysBetween,
     CARDIO_PROTOCOLS: CARDIO_PROTOCOLS, lowerDays: lowerDays, suggestCardioDay: suggestCardioDay, cardioWarnings: cardioWarnings, dayDistance: dayDistance,
     EQUIPMENT: EQUIPMENT, requiredEquipment: requiredEquipment, isAvailable: isAvailable,

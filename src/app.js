@@ -136,6 +136,7 @@
       equipment: p.equipment, prefs: p.prefs, swaps: p.swaps
     });
     p.loads = CE.seedLoads(p);
+    p.onboarded = true;
     p.program = CE.buildProgram({ n: p.block.freq, exMap: CE.getExMap(p.custom), loads: p.loads, equipment: p.equipment, prefs: p.prefs, swaps: p.swaps });
     DB.profiles[p.id] = p;
     DB.activeId = p.id;
@@ -1359,6 +1360,9 @@
     }
     wrap.appendChild(readCard);
 
+    wrap.appendChild(historyCard());
+    wrap.appendChild(stallCard());
+
     /* progresión por ejercicio */
     const loadCard = el('div', { class: 'card' });
     loadCard.appendChild(el('div', { class: 'card-title' }, el('h2', { text: 'Carga y próxima subida' }), el('span', { class: 'meta', text: 'doble progresión' })));
@@ -1393,6 +1397,115 @@
   }
 
   function average(a) { return a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0; }
+
+  /* ---------- historial por ejercicio ---------- */
+  let HIST_EX = null;
+
+  function historyCard() {
+    const ids = [];
+    S.program.days.forEach((d) => d.slots.forEach((sl) => { if (ids.indexOf(sl.ex) < 0) ids.push(sl.ex); }));
+    Object.keys(S.logs || {}).forEach((date) => {
+      Object.keys((S.logs[date] && S.logs[date].entries) || {}).forEach((id) => { if (ids.indexOf(id) < 0) ids.push(id); });
+    });
+    const card = el('div', { class: 'card' });
+    card.appendChild(el('div', { class: 'card-title' }, el('h2', { text: 'Historial por ejercicio' }), el('span', { class: 'meta', text: 'e1RM estimado (Epley)' })));
+
+    if (!ids.length) { card.appendChild(el('div', { class: 'empty', text: 'Aún no hay ejercicios registrados.' })); return card; }
+    const exId = (HIST_EX && ids.indexOf(HIST_EX) >= 0) ? HIST_EX : ids[0];
+    const sel = el('select', { style: { maxWidth: '320px' }, onchange: (e) => { HIST_EX = e.target.value; render(); } });
+    ids.forEach((id) => sel.appendChild(el('option', { value: id, text: CE.exOf(id, EX).name, selected: id === exId ? true : null })));
+    card.appendChild(sel);
+
+    const hist = CE.exerciseHistory(S.logs, exId);
+    if (!hist.length) {
+      card.appendChild(el('div', { class: 'empty', style: { marginTop: '12px' }, text: 'Sin registros de este ejercicio todavía.' }));
+      return card;
+    }
+    const first = hist[0], last = hist[hist.length - 1];
+    const delta = first.e1rm ? (last.e1rm - first.e1rm) / first.e1rm : 0;
+    const stats = el('div', { class: 'grid three', style: { margin: '12px 0' } });
+    stats.appendChild(el('div', { class: 'stat' }, el('span', { class: 'v', text: kg(last.e1rm) }), el('span', { class: 'k', text: 'e1RM actual' }), el('span', { class: 'd', text: kg(last.load) + ' × ' + last.reps })));
+    stats.appendChild(el('div', { class: 'stat' }, el('span', { class: 'v ' + (delta > 0.015 ? 'green' : delta < -0.015 ? 'red' : 'muted'), text: (delta > 0 ? '+' : '') + Math.round(delta * 100) + ' %' }), el('span', { class: 'k', text: 'desde la primera' }), el('span', { class: 'd', text: hist.length + ' sesiones' })));
+    stats.appendChild(el('div', { class: 'stat' }, el('span', { class: 'v', text: tn(last.tonnage) }), el('span', { class: 'k', text: 'tonelaje última' }), el('span', { class: 'd', text: last.sets + ' series' })));
+    card.appendChild(stats);
+
+    if (hist.length > 1) {
+      card.appendChild(lineChart(hist.map((h) => ({ y: h.e1rm, label: shortDate(h.date) })), { label: 'e1RM de ' + CE.exOf(exId, EX).name }));
+    }
+    const st = CE.stagnation(hist, { today: todayISO(), reps: (S.program.days.flatMap((d) => d.slots).filter((sl) => sl.ex === exId)[0] || {}).reps });
+    const cls = st.status === 'up' ? 'green' : st.status === 'flat' ? 'amber' : 'muted';
+    card.appendChild(el('div', { class: 'banner ' + (st.status === 'up' ? 'good' : st.status === 'flat' ? 'warn' : '') },
+      el('b', { text: st.status === 'up' ? 'En progreso. ' : st.status === 'flat' ? 'Estancado. ' : st.status === 'stale' ? 'Sin uso. ' : '' }),
+      el('span', { text: st.suggestion })
+    ));
+    return card;
+  }
+
+  /* ---------- estancamientos ---------- */
+  let STALL_ALL = false;
+
+  function stallCard() {
+    const seen = {};
+    const rows = [];
+    S.program.days.forEach((d) => d.slots.forEach((sl) => {
+      if (seen[sl.ex]) return;
+      seen[sl.ex] = true;
+      const hist = CE.exerciseHistory(S.logs, sl.ex);
+      if (!hist.length) return;
+      const st = CE.stagnation(hist, { today: todayISO(), reps: sl.reps });
+      rows.push({ exId: sl.ex, slot: sl, st: st, hist: hist });
+    }));
+    const flat = rows.filter((r) => r.st.status === 'flat' || r.st.status === 'stale');
+    const up = rows.filter((r) => r.st.status === 'up');
+    const card = el('div', { class: 'card' });
+    card.appendChild(el('div', { class: 'card-title' },
+      el('h2', { text: 'Estancamientos' }),
+      el('span', { class: 'meta', text: up.length + ' en progreso · ' + flat.length + ' parados' })
+    ));
+    if (!rows.length) { card.appendChild(el('div', { class: 'empty', text: 'Con dos o tres semanas de registros aquí aparecen los ejercicios que se han parado.' })); return card; }
+    if (!flat.length) { card.appendChild(el('div', { class: 'banner good' }, el('span', { text: 'Ningún ejercicio parado en las últimas tres sesiones. Todo sube.' }))); return card; }
+
+    flat.sort((a, b) => (b.st.status === 'stale' ? 1 : 0) - (a.st.status === 'stale' ? 1 : 0) || b.hist.length - a.hist.length);
+    const shown = STALL_ALL ? flat : flat.slice(0, 5);
+    shown.forEach((r) => {
+      const inc = CE.exOf(r.exId, EX).incPct || 2.5;
+      const row = el('div', { class: 'row between', style: { padding: '10px 0', borderBottom: '1px solid var(--line)', alignItems: 'flex-start' } });
+      const left = el('div', { style: { flex: '1 1 260px' } });
+      left.appendChild(el('div', {}, el('b', { text: CE.exOf(r.exId, EX).name }), ' ', el('span', { class: 'chip ' + (r.st.status === 'stale' ? '' : 'amber'), text: r.st.status === 'stale' ? 'sin uso' : 'parado' })));
+      left.appendChild(el('div', { class: 'tiny muted', style: { marginTop: '3px' }, text: r.st.suggestion }));
+      row.appendChild(left);
+      if (r.st.status === 'flat') {
+        row.appendChild(el('button', {
+          class: 'btn sm', text: 'subir ' + inc + ' %',
+          onclick: () => {
+            const step = CE.exOf(r.exId, EX).step || 2.5;
+            S.loads[r.exId] = CE.roundTo((S.loads[r.exId] || 0) * (1 + inc / 100), step);
+            save(true); render(); toast(CE.exOf(r.exId, EX).name + ' → ' + kg(S.loads[r.exId]) + ' kg');
+          }
+        }));
+      } else {
+        row.appendChild(el('button', {
+          class: 'btn sm ghost', text: 'bajar 10 %',
+          onclick: () => {
+            const step = CE.exOf(r.exId, EX).step || 2.5;
+            S.loads[r.exId] = CE.roundTo((S.loads[r.exId] || 0) * 0.9, step);
+            save(true); render(); toast('Carga suavizada para reintroducir');
+          }
+        }));
+      }
+      card.appendChild(row);
+    });
+    if (flat.length > 5) {
+      card.appendChild(el('div', { class: 'row', style: { marginTop: '10px' } },
+        el('button', {
+          class: 'btn sm ghost',
+          text: STALL_ALL ? 'ver solo los 5 primeros' : '+ ' + (flat.length - 5) + ' más',
+          onclick: () => { STALL_ALL = !STALL_ALL; render(); }
+        })
+      ));
+    }
+    return card;
+  }
 
   function measurementsCard() {
     const card = el('div', { class: 'card' });
@@ -1721,6 +1834,131 @@
   }
 
   /* ------------------------------------------------------------------ *
+   * ALTA GUIADA (3 pasos)
+   * ------------------------------------------------------------------ */
+  let ONB = null;
+
+  function openOnboarding() {
+    ONB = {
+      step: 0,
+      name: S.name && S.name !== 'Atleta' ? S.name : '',
+      weightKg: S.athlete.weightKg || 65,
+      experience: S.athlete.experience || 'intermedio',
+      equipment: (S.equipment || []).slice(),
+      freq: S.block.freq || 4,
+      hiit: (S.cardio && S.cardio.hiit) || 0,
+      cycle: !!(S.cycle && S.cycle.enabled),
+      lastStart: (S.cycle && S.cycle.lastStart) || ''
+    };
+    renderOnboarding();
+  }
+
+  function renderOnboarding() {
+    const body = el('div', { class: 'stack' });
+    const dots = el('div', { class: 'row tight', style: { marginBottom: '4px' } });
+    for (let i = 0; i < 3; i++) {
+      dots.appendChild(el('span', { style: { width: '22px', height: '3px', borderRadius: '2px', background: i <= ONB.step ? 'var(--ink)' : 'var(--line-2)' } }));
+    }
+    body.appendChild(dots);
+
+    if (ONB.step === 0) {
+      const name = el('input', { type: 'text', value: ONB.name, placeholder: 'Nombre' });
+      const weight = el('input', { type: 'number', step: '0.1', min: '30', max: '200', value: ONB.weightKg });
+      const exp = el('select');
+      [['principiante', 'Menos de 1 año'], ['intermedio', '1 a 3 años'], ['avanzado', 'Más de 3 años']].forEach(([id, label]) => {
+        exp.appendChild(el('option', { value: id, text: label, selected: ONB.experience === id ? true : null }));
+      });
+      name.addEventListener('input', () => { ONB.name = name.value; });
+      weight.addEventListener('input', () => { ONB.weightKg = num(weight.value); });
+      exp.addEventListener('change', () => { ONB.experience = exp.value; });
+      body.appendChild(el('p', { class: 'hint', text: 'Con esto se estiman las cargas de la primera semana. En cuanto registres una serie, mandan tus datos.' }));
+      body.appendChild(el('label', { class: 'fld' }, 'Nombre', name));
+      body.appendChild(el('div', { class: 'grid two' },
+        el('label', { class: 'fld' }, 'Peso corporal (kg)', weight),
+        el('label', { class: 'fld' }, 'Experiencia', exp)
+      ));
+    }
+
+    if (ONB.step === 1) {
+      body.appendChild(el('p', { class: 'hint', text: 'Marca lo que tienes. El programa se construye solo con eso: lo que no tengas se sustituye por una variante equivalente.' }));
+      const grid = el('div', { class: 'equip-grid' });
+      CE.EQUIPMENT.forEach((item) => {
+        if (item.always) return;
+        const on = ONB.equipment.indexOf(item.id) >= 0;
+        const box = el('input', { type: 'checkbox', checked: on ? true : null });
+        box.addEventListener('change', () => {
+          if (box.checked) { if (ONB.equipment.indexOf(item.id) < 0) ONB.equipment.push(item.id); }
+          else ONB.equipment = ONB.equipment.filter((x) => x !== item.id);
+        });
+        grid.appendChild(el('label', { class: 'equip' + (on ? '' : ' off') }, box, el('span', {}, el('b', { text: item.label }), el('span', { text: item.hint || '' }))));
+      });
+      body.appendChild(grid);
+      body.appendChild(el('button', { class: 'btn sm ghost', text: 'Seleccionar todo', onclick: () => { ONB.equipment = CE.EQUIPMENT.map((e) => e.id); renderOnboarding(); } }));
+    }
+
+    if (ONB.step === 2) {
+      const seg = el('div', { class: 'seg' });
+      [2, 3, 4, 5, 6].forEach((n) => seg.appendChild(el('button', {
+        type: 'button', text: n + ' d', 'aria-pressed': ONB.freq === n ? 'true' : 'false',
+        onclick: () => { ONB.freq = n; renderOnboarding(); }
+      })));
+      body.appendChild(el('label', { class: 'fld' }, 'Días por semana', seg));
+
+      const hiit = el('div', { class: 'seg', style: { marginTop: '10px' } });
+      [0, 1, 2].forEach((n) => hiit.appendChild(el('button', {
+        type: 'button', text: n === 0 ? 'sin HIIT' : n + '/semana', 'aria-pressed': ONB.hiit === n ? 'true' : 'false',
+        onclick: () => { ONB.hiit = n; renderOnboarding(); }
+      })));
+      body.appendChild(el('label', { class: 'fld' }, 'HIIT', hiit));
+
+      const cyc = el('div', { class: 'seg', style: { marginTop: '10px' } });
+      [[false, 'No'], [true, 'Sí']].forEach(([v, label]) => cyc.appendChild(el('button', {
+        type: 'button', text: label, 'aria-pressed': ONB.cycle === v ? 'true' : 'false',
+        onclick: () => { ONB.cycle = v; renderOnboarding(); }
+      })));
+      body.appendChild(el('label', { class: 'fld' }, 'Registrar ciclo menstrual', cyc));
+
+      if (ONB.cycle) {
+        const last = el('input', { type: 'date', value: ONB.lastStart });
+        last.addEventListener('change', () => { ONB.lastStart = last.value; });
+        body.appendChild(el('label', { class: 'fld', style: { marginTop: '8px' } }, 'Primer día del último periodo', last));
+      }
+      body.appendChild(el('p', { class: 'tiny muted', text: 'Podrás cambiarlo todo después en Ajustes.' }));
+    }
+
+    const actions = [];
+    if (ONB.step > 0) actions.push({ label: 'Atrás', ghost: true, onClick: () => { ONB.step--; renderOnboarding(); } });
+    actions.push({ label: 'Saltar', ghost: true, onClick: () => finishOnboarding(true) });
+    actions.push({
+      label: ONB.step < 2 ? 'Siguiente' : 'Crear mi plan', primary: true,
+      onClick: () => { if (ONB.step < 2) { ONB.step++; renderOnboarding(); } else finishOnboarding(false); }
+    });
+    openSheet('Tu cuaderno en 3 pasos', 'Paso ' + (ONB.step + 1) + ' de 3', body, actions);
+  }
+
+  function finishOnboarding(skip) {
+    if (!skip) {
+      S.name = (ONB.name || '').trim() || S.name || 'Atleta';
+      S.athlete.name = S.name;
+      S.athlete.weightKg = ONB.weightKg || S.athlete.weightKg;
+      S.athlete.experience = ONB.experience;
+      S.equipment = ONB.equipment.slice();
+      S.block.freq = ONB.freq;
+      S.loads = CE.seedLoads(S);
+      const sug = CE.suggestCardioDay(CE.buildProgram({ n: ONB.freq, exMap: EX, loads: S.loads, equipment: S.equipment }), EX);
+      S.cardio = Object.assign({}, S.cardio, { hiit: ONB.hiit, day: sug.weekday, steps: (S.cardio && S.cardio.steps) || 8000 });
+      S.cycle = Object.assign({}, S.cycle, { enabled: ONB.cycle, lastStart: ONB.lastStart || (S.cycle && S.cycle.lastStart) || '' });
+      S.program = CE.buildProgram({ n: ONB.freq, exMap: EX, loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps });
+    }
+    S.onboarded = true;
+    save(true);
+    closeSheet();
+    refreshDerived();
+    render();
+    toast(skip ? 'Puedes configurarlo todo en Ajustes' : 'Plan creado: ' + S.program.days.length + ' días');
+  }
+
+  /* ------------------------------------------------------------------ *
    * AJUSTES
    * ------------------------------------------------------------------ */
   let AI_RESULT = null;
@@ -1784,6 +2022,7 @@
           save(true); render(); toast('Perfil guardado');
         }
       }),
+      el('button', { class: 'btn sm ghost', text: 'Repetir el alta guiada', onclick: openOnboarding }),
       el('span', { class: 'tiny muted', text: 'Proteína objetivo: ' + Math.round(S.athlete.proteinMin * S.athlete.weightKg) + '–' + Math.round(S.athlete.proteinMax * S.athlete.weightKg) + ' g/día' })
     ));
     const exp = el('select');
@@ -2448,6 +2687,8 @@
     setupPWA();
 
     save(true);
+    const params = new URLSearchParams(location.search);
+    if (!S.onboarded && params.get('demo') !== '1' && params.get('selftest') !== '1') openOnboarding();
     if (new URLSearchParams(location.search).get('selftest') === '1') return runSelfTest();
     if (new URLSearchParams(location.search).get('demo') === '1') seedDemo();
     render();
@@ -2504,6 +2745,7 @@
         S.logs[date] = log;
       });
     }
+    S.onboarded = true;
     save(true);
   }
 

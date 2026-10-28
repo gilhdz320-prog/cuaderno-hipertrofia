@@ -300,3 +300,24 @@ test('ciclo: patrón propio a partir de los registros', () => {
   assert.equal(pat.weakest[0].day, 1, 'el día 1 es el más flojo');
   assert.equal(CE.cyclePattern({ '2026-10-01': { cycle: { strength: 2 } } }, c), null, 'con uno no alcanza');
 });
+
+test('historial y estancamiento por ejercicio', () => {
+  const logs = {};
+  const add = (d, l, r, rir) => { logs[d] = { entries: { bench: { sets: [{ reps: r, load: l, rir: rir, done: true }, { reps: r - 1, load: l, rir: rir, done: true }] } } }; };
+  add('2026-10-01', 60, 8, 2); add('2026-10-08', 60, 8, 2); add('2026-10-15', 60, 8, 2);
+  const h = CE.exerciseHistory(logs, 'bench');
+  assert.equal(h.length, 3);
+  assert.ok(Math.abs(h[0].e1rm - 76) < 0.2, 'e1RM de 60x8 ≈ 76');
+  assert.equal(CE.stagnation(h, { today: '2026-10-20', reps: [6, 8] }).status, 'flat');
+  add('2026-10-22', 65, 8, 2);
+  assert.equal(CE.stagnation(CE.exerciseHistory(logs, 'bench'), { today: '2026-10-24', reps: [6, 8] }).status, 'up');
+  assert.equal(CE.stagnation(CE.exerciseHistory({ '2026-09-01': logs['2026-10-01'] }, 'bench'), { today: '2026-10-25' }).status, 'stale');
+});
+
+test('el alta guiada no se repite a quien ya tenía datos', () => {
+  const vigente = CE.migrateState(null);
+  const p = Object.values(vigente.profiles)[0];
+  assert.equal(p.onboarded, false, 'perfil nuevo: pasa por el alta');
+  const conDatos = CE.migrateState({ version: 3, activeId: p.id, profiles: { [p.id]: Object.assign({}, p, { onboarded: undefined, logs: { '2026-10-01': { entries: {} } } }) } });
+  assert.equal(Object.values(conDatos.profiles)[0].onboarded, true, 'perfil con datos: sin alta');
+});

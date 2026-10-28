@@ -70,6 +70,14 @@ Ejemplos reales del motor:
 | Solo mancuernas y banco | Puente a una pierna, RDL con mancuernas, press con mancuernas, pájaros, fondos en banco… |
 | Sin material | Flexiones, fondos, sentadilla a una pierna, almeja, puente a una pierna, sissy squat… |
 
+## Historial y estancamientos
+
+En **Progreso** cada ejercicio tiene su historial: e1RM estimado (Epley) sesión a sesión, mejor serie, tonelaje y cambio porcentual desde la primera vez. Encima, una tarjeta de **estancamientos** que compara el e1RM de la última sesión con el de dos sesiones antes: si en tres sesiones no sube al menos un 1,5 %, lo marca y propone una acción concreta (subir un escalón, cambiar el rango, añadir una serie o reintroducir la variante si llevas 21 días sin tocarla).
+
+## Alta guiada
+
+La primera vez que abres el cuaderno (o desde *Ajustes → Repetir el alta guiada*) hay un asistente de tres pasos: quién entrena y con qué experiencia, qué material tiene, y cuántos días y cardio quiere. Con eso se construye el programa, se estiman las cargas y se coloca el HIIT. Se puede saltar.
+
 ## Ciclo y autorregulación
 
 Opcional, por perfil. Se activa en *Ajustes → Ciclo y autorregulación*: fecha del último periodo, duración del ciclo y del sangrado. La app calcula el día y la fase, y **en los días de sangrado pregunta cómo va la fuerza** (normal / algo baja / muy baja, más dolor y descanso).
@@ -185,9 +193,9 @@ Verifica manifiesto, iconos, instalabilidad, service worker y que la app abre si
 │   ├── styles.css
 │   ├── engine.js               lógica pura: volumen, tonelaje, progresión, fases
 │   └── app.js                  interfaz
-├── tests/engine.test.mjs       25 pruebas del motor
+├── tests/engine.test.mjs       27 pruebas del motor
 ├── tools/
-│   ├── e2e.mjs                 37 pruebas de interacción en Chrome real
+│   ├── e2e.mjs                 38 pruebas de interacción en Chrome real
 │   ├── shot.mjs                capturas con emulación de móvil
 │   ├── pdf.sh                  genera el PDF
 │   ├── icons.py                regenera los iconos
@@ -204,8 +212,8 @@ Requiere Node ≥ 20 (sin dependencias).
 ```bash
 npm run build   # regenera index.html y sw.js desde src/
 npm run pack    # genera public/ (app + PWA + PDF) para desplegar
-npm test        # 25 pruebas del motor
-npm run e2e     # 37 pruebas de interacción (necesita Chrome)
+npm test        # 27 pruebas del motor
+npm run e2e     # 38 pruebas de interacción (necesita Chrome)
 npm run pdf     # regenera cuaderno-bloque.pdf (necesita Chrome)
 npm run pwa <url>  # comprueba manifiesto, SW y offline contra una URL
 ```

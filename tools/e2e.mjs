@@ -52,6 +52,13 @@ const url = /^https?:/.test(file) ? file : 'file://' + file;
 await send('Page.navigate', { url });
 await sleep(1500);
 
+const onbOpen = await ev("!document.getElementById('modal').hidden");
+if (onbOpen) {
+  await ev("[...document.querySelectorAll('.sheet-actions button')].find(function(b){return b.textContent==='Saltar'}).click()");
+  await sleep(600);
+}
+check('el alta guiada se puede saltar', !(await ev("!document.getElementById('modal').hidden")));
+
 check('arranca con la sesión de hoy', await ev("!!document.querySelector('#view h1')"), await ev("document.querySelector('#view h1') && document.querySelector('#view h1').textContent"));
 check('hay tarjetas de ejercicio', (await ev("document.querySelectorAll('.ex').length")) > 0, await ev("document.querySelectorAll('.ex').length"));
 check('la cabecera muestra la semana', /Semana/i.test(await ev("document.getElementById('weekChip').textContent")), await ev("document.getElementById('weekChip').textContent"));
