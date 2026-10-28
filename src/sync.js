@@ -26,6 +26,33 @@
     return u;
   }
 
+  function decodeJwt(token) {
+    try {
+      const part = String(token).split('.')[1] || '';
+      const b64 = part.replace(/-/g, '+').replace(/_/g, '/');
+      const json = typeof atob === 'function' ? atob(b64) : Buffer.from(b64, 'base64').toString('binary');
+      return JSON.parse(json);
+    } catch (e) { return null; }
+  }
+
+  /* Enlaces de confirmación de Supabase: el token llega en el hash
+     (#access_token=…&refresh_token=…&expires_in=…). */
+  function sessionFromHash(hash) {
+    const h = String(hash || '').replace(/^#/, '');
+    if (!h || h.indexOf('access_token=') < 0) return null;
+    let params;
+    try { params = new URLSearchParams(h); } catch (e) { return null; }
+    const access = params.get('access_token');
+    if (!access) return null;
+    const payload = decodeJwt(access);
+    return {
+      access_token: access,
+      refresh_token: params.get('refresh_token') || '',
+      expires_at: nowSec() + Number(params.get('expires_in') || 3600),
+      user: payload ? { id: payload.sub, email: payload.email } : null
+    };
+  }
+
   /* Crea un cliente. opts: { url, anonKey, fetch, storage }
      storage: { get(k), set(k,v), remove(k) } — normalmente localStorage. */
   function createSync(opts) {
@@ -37,6 +64,13 @@
     let session = null;
 
     function configured() { return !!(base && anonKey && doFetch); }
+
+    function adoptUrl(hash) {
+      const s = sessionFromHash(hash);
+      if (!s) return false;
+      saveSession(s);
+      return true;
+    }
 
     async function health() {
       if (!configured()) throw new Error('Falta la URL del proyecto');
@@ -185,7 +219,7 @@
     }
 
     return {
-      configured: configured, health: health, url: base,
+      configured: configured, health: health, adoptUrl: adoptUrl, url: base,
       signUp: signUp, signIn: signIn, signOut: signOut, refresh: refresh,
       currentSession: currentSession, pull: pull, push: push, remove: remove,
       session: function () { return loadSession(); },
@@ -221,5 +255,5 @@
     return { toLocal: toLocal, toRemote: toRemote };
   }
 
-  return { createSync: createSync, reconcile: reconcile, normalizeUrl: normalizeUrl, SESSION_KEY: SESSION_KEY };
+  return { createSync: createSync, reconcile: reconcile, normalizeUrl: normalizeUrl, sessionFromHash: sessionFromHash, SESSION_KEY: SESSION_KEY };
 });

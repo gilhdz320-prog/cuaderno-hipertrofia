@@ -113,3 +113,27 @@ test('health falla claro si el dominio no responde', async () => {
   const s = SYNC.createSync({ url: 'malo.supabase.co', anonKey: 'k', fetch: f, storage: memStorage() });
   await assert.rejects(() => s.health(), /Failed to fetch/);
 });
+
+test('lee la sesión del hash de confirmación de Supabase', () => {
+  const payload = Buffer.from(JSON.stringify({ sub: 'u-123', email: 'a@b.c' })).toString('base64')
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const token = 'eyJhbGciOiJIUzI1NiJ9.' + payload + '.firma';
+  const hash = '#access_token=' + token + '&refresh_token=r-9&expires_in=3600&token_type=bearer&type=signup';
+  const s = SYNC.sessionFromHash(hash);
+  assert.equal(s.access_token, token);
+  assert.equal(s.refresh_token, 'r-9');
+  assert.equal(s.user.id, 'u-123');
+  assert.equal(s.user.email, 'a@b.c');
+  assert.equal(SYNC.sessionFromHash('#hoy'), null);
+  assert.equal(SYNC.sessionFromHash(''), null);
+});
+
+test('adoptUrl guarda la sesión del enlace', () => {
+  const payload = Buffer.from(JSON.stringify({ sub: 'u-1', email: 'x@y.z' })).toString('base64').replace(/=+$/, '');
+  const hash = '#access_token=aaa.' + payload + '.bbb&refresh_token=r&expires_in=100';
+  const storage = memStorage();
+  const s = SYNC.createSync({ url: base, anonKey: anon, fetch: fakeFetch([]), storage });
+  assert.equal(s.adoptUrl(hash), true);
+  assert.ok(storage.get('cuaderno.session'));
+  assert.equal(s.userEmail(), 'x@y.z');
+});

@@ -2933,6 +2933,16 @@
 
     setupPWA();
     initSync();
+    /* Si venimos de un enlace de confirmación de Supabase, el token está en la URL */
+    if (SYNC_CLIENT) {
+      try {
+        if (SYNC_CLIENT.adoptUrl(location.hash)) {
+          SYNC_STATE = 'on';
+          history.replaceState(null, '', location.pathname + location.search);
+          setTimeout(function () { toast('Cuenta confirmada. Sincronizando…'); }, 400);
+        }
+      } catch (e) { /* hash no válido */ }
+    }
 
     save(true);
     const params = new URLSearchParams(location.search);
