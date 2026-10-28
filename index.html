@@ -5694,6 +5694,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
 
     const actions = [];
     if (ONB.step > 0) actions.push({ label: 'Atrás', ghost: true, onClick: () => { ONB.step--; renderOnboarding(); } });
+    if (ONB.step === 0) actions.push({ label: 'Ya tengo cuenta', ghost: true, onClick: () => { closeSheet(); go('ajustes'); toast('Entra con tu correo en la tarjeta «Cuenta y sincronización»'); } });
     actions.push({ label: 'Saltar', ghost: true, onClick: () => finishOnboarding(true) });
     actions.push({
       label: ONB.step < 2 ? 'Siguiente' : 'Crear mi plan', primary: true,
@@ -6134,6 +6135,21 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
           }
           SYNC_STATE = 'on';
           const rec = await syncNow();
+          /* si el perfil local está vacío y la nube trajo uno con datos, úsalo */
+          const localLogs = Object.keys((S.logs) || {}).length;
+          if (!localLogs) {
+            const otros = Object.keys(DB.profiles)
+              .map(function (id) { return DB.profiles[id]; })
+              .filter(function (p) { return p.id !== DB.activeId && Object.keys(p.logs || {}).length > 0; })
+              .sort(function (a, b) { return Object.keys(b.logs || {}).length - Object.keys(a.logs || {}).length; });
+            if (otros.length) {
+              DB.activeId = otros[0].id;
+              S = DB.profiles[DB.activeId];
+              save(true); refreshDerived(); render();
+              toast('Entrado como ' + (S.name || 'tu perfil') + ' · ' + Object.keys(S.logs).length + ' sesiones recuperadas');
+              return;
+            }
+          }
           toast('Conectado · ' + rec.toLocal.length + ' desde la nube, ' + rec.toRemote.length + ' subidos');
         } catch (err) {
           const msg = String(err.message || err);
