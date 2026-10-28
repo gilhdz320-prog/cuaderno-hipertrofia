@@ -285,6 +285,16 @@ check('la guía explica lo esencial', (await ev("document.querySelector('#view')
 
 
 
+/* ---------- reparto desde Hoy ---------- */
+await ev("document.querySelector('[data-tab=hoy]').click()");
+await sleep(500);
+await ev("[...document.querySelectorAll('button')].find(function(b){return b.textContent==='Cambiar método'}).click()");
+await sleep(500);
+check('el método se cambia desde Hoy', (await ev("document.getElementById('sheet').textContent.indexOf('Reparto de la semana') >= 0")) === true);
+await ev("[...document.querySelectorAll('.sheet .btn.sm')].find(function(b){return b.textContent==='elegir'}).click()");
+await sleep(700);
+check('elegir en la hoja reconstruye el plan', (await ev("Cuaderno.state().program.days.length")) > 0 && (await ev("Cuaderno.state().block.split")) !== 'auto', await ev("Cuaderno.state().block.split"));
+
 /* ---------- repartos ---------- */
 await ev("document.querySelector('[data-tab=semana]').click()");
 await sleep(600);
