@@ -1227,7 +1227,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
       version: VERSION,
       athlete: { name: 'Atleta', weightKg: 65, heightCm: 165, kcal: 1675, proteinMin: 1.8, proteinMax: 2.2, experience: 'intermedio' },
       block: {
-        name: 'Bloque 3 · Hipertrofia en déficit',
+        name: 'Mi bloque',
         start: toISODate(monday),
         weeks: 12,
         freq: 4,
