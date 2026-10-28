@@ -32,6 +32,7 @@
         <span class="chip" id="weekChip">semana 1</span>
         <span class="chip" id="freqChip">4 días</span>
         <button class="btn sm hidden" id="installBtn" title="Instalar en la pantalla de inicio">Instalar</button>
+        <span class="chip hidden" id="syncChip"></span>
         <span class="save" id="saveState"><i class="dot"></i>guardado</span>
         <button class="btn icon ghost" id="themeBtn" title="Cambiar tema" aria-label="Cambiar entre tema claro y oscuro">◐</button>
       </div>
@@ -71,7 +72,9 @@
 
   <div class="toast" id="toast" role="status"></div>
 
+  <script src="config.js"></script>
   <script src="engine.js"></script>
+  <script src="sync.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -8,9 +8,11 @@ const read = (f) => fs.readFileSync(new URL(f, dir), 'utf8');
 let html = read('shell.html');
 const css = read('styles.css');
 const engine = read('engine.js');
+const sync = read('sync.js');
+const config = read('config.js');
 const app = read('app.js');
 
-for (const [name, body] of [['engine.js', engine], ['app.js', app]]) {
+for (const [name, body] of [['engine.js', engine], ['sync.js', sync], ['app.js', app]]) {
   if (body.includes('</script')) throw new Error('secuencia </script en ' + name);
 }
 
@@ -21,10 +23,12 @@ const put = (src, token, body) => {
   return src.replace(token, () => body);
 };
 html = put(html, '<link rel="stylesheet" href="styles.css">', '<style>\n' + css + '\n</style>');
+html = put(html, '<script src="config.js"></script>', '<script>\n' + config + '\n</script>');
 html = put(html, '<script src="engine.js"></script>', '<script>\n' + engine + '\n</script>');
+html = put(html, '<script src="sync.js"></script>', '<script>\n' + sync + '\n</script>');
 html = put(html, '<script src="app.js"></script>', '<script>\n' + app + '\n</script>');
 
-if (html.includes('src="app.js"') || html.includes('href="styles.css"')) throw new Error('quedan referencias externas');
+if (html.includes('src="app.js"') || html.includes('href="styles.css"') || html.includes('src="sync.js"')) throw new Error('quedan referencias externas');
 
 /* El service worker lleva la versión de la caché: cada build la invalida. */
 const hash = crypto.createHash('sha1').update(html).digest('hex').slice(0, 10);

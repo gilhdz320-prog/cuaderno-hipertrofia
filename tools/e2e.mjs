@@ -175,6 +175,15 @@ check('quita series ese día', cst.delta <= -1, ciclo);
 check('muestra el aviso de ajuste', (await ev("document.body.textContent.indexOf('Sesión ajustada') >= 0")) === true);
 check('el programa no se toca', (await ev("(function(){var S=Cuaderno.state(); var n=0; S.program.days.forEach(function(d){d.slots.forEach(function(x){n+=x.sets})}); return n})()")) === setsAntes, setsAntes);
 
+/* ---------- cuenta y sincronización ---------- */
+await ev("document.querySelector('[data-tab=ajustes]').click()");
+await sleep(500);
+check('hay tarjeta de cuenta', (await ev("document.body.textContent.indexOf('Cuenta y sincronización') >= 0")) === true);
+await ev("(function(){var c=[...document.querySelectorAll('.card')].find(function(x){return /Cuenta y sincronización/.test(x.textContent)}); var i=c.querySelectorAll('input'); i[0].value='https://prueba.supabase.co'; i[1].value='anon-de-prueba'; [...c.querySelectorAll('button')].find(function(b){return b.textContent==='Guardar configuración'}).click(); return 1})()");
+await sleep(600);
+check('al guardar configuración pide correo y contraseña', (await ev("document.querySelectorAll('input[type=password]').length")) >= 1);
+check('la sincronización no rompe el guardado local', (await ev("(function(){try{var raw=localStorage.getItem('cuaderno.v3');return !!raw && !!JSON.parse(raw).profiles}catch(e){return false}})()")) === true);
+
 check('sin excepciones de JavaScript', exceptions.length === 0, exceptions.join(' | '));
 
 console.log(JSON.stringify(results.map(r => (r.pass ? 'PASS ' : 'FAIL ') + r.name + (r.detail ? '  [' + r.detail + ']' : '')), null, 1));

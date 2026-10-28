@@ -120,9 +120,11 @@
   }
   function writeStore() {
     DB.updatedAt = new Date().toISOString();
+    if (S) S.updatedAt = DB.updatedAt;
     try { localStorage.setItem(KEY, JSON.stringify(DB)); storageOK = true; }
     catch (e) { storageOK = false; }
     flashSaved();
+    scheduleSync();
   }
 
   /* ---------- perfiles ---------- */
@@ -170,6 +172,87 @@
     s.appendChild(document.createTextNode(storageOK ? 'guardado' : 'sin guardar'));
     clearTimeout(flashT);
     flashT = setTimeout(() => { if (!storageOK) return; }, 1200);
+  }
+
+  /* ---------- sincronización (Supabase) ---------- */
+  const SYNC_CFG_KEY = 'cuaderno.supabase';
+  let SYNC_CLIENT = null;
+  let SYNC_STATE = 'off';
+  let SYNC_ERR = null;
+  let SYNC_LAST = null;
+  let syncTimer = null;
+
+  function syncCfg() {
+    const def = window.CUADERNO_CONFIG || {};
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem(SYNC_CFG_KEY) || '{}'); } catch (e) { saved = {}; }
+    return { url: saved.url || def.supabaseUrl || '', key: saved.key || def.supabaseAnonKey || '' };
+  }
+  function saveSyncCfg(url, key) {
+    try { localStorage.setItem(SYNC_CFG_KEY, JSON.stringify({ url: url, key: key })); } catch (e) {}
+  }
+  function initSync() {
+    const c = syncCfg();
+    SYNC_CLIENT = null;
+    if (!c.url || !c.key || !window.CuadernoSync) { SYNC_STATE = 'off'; return; }
+    SYNC_CLIENT = window.CuadernoSync.createSync({
+      url: c.url, anonKey: c.key,
+      storage: {
+        get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+        set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+        remove: function (k) { try { localStorage.removeItem(k); } catch (e) {} }
+      }
+    });
+    SYNC_STATE = SYNC_CLIENT.session() ? 'on' : 'off';
+  }
+
+  function renderSyncChip() {
+    const chip = $('#syncChip');
+    if (!chip) return;
+    if (SYNC_STATE === 'off') { chip.classList.add('hidden'); return; }
+    chip.classList.remove('hidden');
+    chip.className = 'chip ' + (SYNC_STATE === 'on' ? 'green' : SYNC_STATE === 'error' ? 'red' : 'amber');
+    chip.textContent = SYNC_STATE === 'on' ? 'nube' : SYNC_STATE === 'syncing' ? 'guardando…' : 'sin nube';
+    chip.title = SYNC_ERR || (SYNC_LAST ? 'Última sincronización: ' + SYNC_LAST.toLocaleTimeString('es-ES') : '');
+  }
+
+  function scheduleSync() {
+    if (!SYNC_CLIENT || !SYNC_CLIENT.session()) return;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(function () { pushActive().catch(function () {}); }, 4000);
+  }
+
+  async function pushActive() {
+    if (!SYNC_CLIENT) return false;
+    SYNC_STATE = 'syncing'; renderSyncChip();
+    try {
+      await SYNC_CLIENT.push(S);
+      SYNC_STATE = 'on'; SYNC_LAST = new Date(); SYNC_ERR = null;
+    } catch (e) {
+      SYNC_STATE = 'error'; SYNC_ERR = e.message || String(e);
+    }
+    renderSyncChip();
+    return SYNC_STATE === 'on';
+  }
+
+  async function syncNow() {
+    if (!SYNC_CLIENT) throw new Error('Falta configurar el proyecto en Ajustes → Cuenta.');
+    SYNC_STATE = 'syncing'; renderSyncChip();
+    try {
+      const rows = await SYNC_CLIENT.pull();
+      const rec = window.CuadernoSync.reconcile(profileList(), rows);
+      rec.toLocal.forEach(function (p) { DB.profiles[p.id] = CE.normalizeProfile(p); });
+      for (const p of rec.toRemote) await SYNC_CLIENT.push(p);
+      if (!DB.profiles[DB.activeId]) DB.activeId = Object.keys(DB.profiles)[0];
+      S = DB.profiles[DB.activeId];
+      SYNC_STATE = 'on'; SYNC_LAST = new Date(); SYNC_ERR = null;
+      save(true); refreshDerived(); render();
+      return rec;
+    } catch (e) {
+      SYNC_STATE = 'error'; SYNC_ERR = e.message || String(e);
+      renderSyncChip();
+      throw e;
+    }
   }
 
   function refreshDerived() {
@@ -241,6 +324,7 @@
     if (bn) bn.textContent = S.block.name;
     const pn = $('#profileName');
     if (pn) pn.textContent = S.name || 'Atleta';
+    renderSyncChip();
     const av = $('#avatarInitial');
     if (av) av.textContent = (S.name || 'A').trim().charAt(0);
     $$('.tab').forEach(t => t.setAttribute('aria-selected', t.dataset.tab === TAB ? 'true' : 'false'));
@@ -1982,6 +2066,7 @@
     wrap.appendChild(cycleCardSettings());
     wrap.appendChild(cardioCard());
     wrap.appendChild(prefsCard());
+    wrap.appendChild(accountCard());
     wrap.appendChild(aiCard());
     wrap.appendChild(dataCard());
     return wrap;
@@ -2250,6 +2335,100 @@
     }
     save(true); render();
     toast(msg);
+  }
+
+  function accountCard() {
+    const card = el('div', { class: 'card' });
+    const cfg = syncCfg();
+    const sess = SYNC_CLIENT && SYNC_CLIENT.session();
+    card.appendChild(el('div', { class: 'card-title' },
+      el('h2', { text: 'Cuenta y sincronización' }),
+      el('span', { class: 'chip ' + (sess ? 'green' : '') , text: sess ? 'conectado' : cfg.url ? 'sin sesión' : 'solo local' })
+    ));
+    card.appendChild(el('p', { class: 'hint', text: 'Opcional. Sin cuenta, el cuaderno vive solo en este navegador. Con cuenta, tus perfiles se guardan en tu Supabase y puedes abrirlos desde otro dispositivo.' }));
+
+    if (!cfg.url) {
+      const url = el('input', { type: 'text', placeholder: 'https://xxxx.supabase.co', value: '' });
+      const key = el('input', { type: 'text', placeholder: 'anon key (pública)', value: '' });
+      card.appendChild(el('div', { class: 'grid two' },
+        el('label', { class: 'fld' }, 'URL del proyecto', url),
+        el('label', { class: 'fld' }, 'anon key', key)
+      ));
+      card.appendChild(el('div', { class: 'row', style: { marginTop: '10px' } },
+        el('button', {
+          class: 'btn sm primary', text: 'Guardar configuración',
+          onclick: () => {
+            const u = url.value.trim(), k = key.value.trim();
+            if (!u || !k) { toast('Faltan la URL o la clave'); return; }
+            saveSyncCfg(u, k);
+            initSync(); render();
+            toast('Proyecto conectado: ahora crea la cuenta');
+          }
+        }),
+        el('span', { class: 'tiny muted', text: 'La anon key es pública: la protección la pone RLS en la base de datos.' })
+      ));
+      return card;
+    }
+
+    if (!sess) {
+      const email = el('input', { type: 'email', placeholder: 'tu@correo.com', autocomplete: 'email' });
+      const pass = el('input', { type: 'password', placeholder: 'Contraseña (mínimo 6)', autocomplete: 'current-password' });
+      card.appendChild(el('div', { class: 'grid two' },
+        el('label', { class: 'fld' }, 'Correo', email),
+        el('label', { class: 'fld' }, 'Contraseña', pass)
+      ));
+      const run = async (mode) => {
+        const e = email.value.trim(), pw = pass.value;
+        if (!e || !pw) { toast('Escribe correo y contraseña'); return; }
+        try {
+          if (mode === 'up') {
+            const r = await SYNC_CLIENT.signUp(e, pw);
+            if (r && r.pending) { toast('Cuenta creada: confirma el correo y luego entra'); return; }
+          } else {
+            await SYNC_CLIENT.signIn(e, pw);
+          }
+          SYNC_STATE = 'on';
+          const rec = await syncNow();
+          toast('Conectado · ' + rec.toLocal.length + ' desde la nube, ' + rec.toRemote.length + ' subidos');
+        } catch (err) {
+          toast('No se pudo: ' + (err.message || err));
+        }
+      };
+      card.appendChild(el('div', { class: 'row', style: { marginTop: '10px' } },
+        el('button', { class: 'btn sm primary', text: 'Entrar', onclick: () => run('in') }),
+        el('button', { class: 'btn sm', text: 'Crear cuenta', onclick: () => run('up') })
+      ));
+      card.appendChild(el('div', { class: 'row', style: { marginTop: '8px' } },
+        el('button', { class: 'btn sm ghost', text: 'Cambiar proyecto', onclick: () => { saveSyncCfg('', ''); initSync(); render(); } })
+      ));
+      return card;
+    }
+
+    card.appendChild(el('div', { class: 'banner good' },
+      el('b', { text: 'Sesión: ' + (SYNC_CLIENT.userEmail() || '—') + '. ' }),
+      el('span', { text: SYNC_LAST ? 'Última sincronización a las ' + SYNC_LAST.toLocaleTimeString('es-ES') + '.' : 'Sincroniza para bajar lo que tengas en la nube.' })
+    ));
+    card.appendChild(el('div', { class: 'row', style: { marginTop: '10px' } },
+      el('button', {
+        class: 'btn sm primary', text: 'Sincronizar ahora',
+        onclick: async () => {
+          try {
+            const rec = await syncNow();
+            toast('Sincronizado · ' + rec.toLocal.length + ' bajados, ' + rec.toRemote.length + ' subidos');
+          } catch (e) { toast('Error: ' + (e.message || e)); }
+        }
+      }),
+      el('button', {
+        class: 'btn sm ghost', text: 'Salir',
+        onclick: async () => {
+          await SYNC_CLIENT.signOut();
+          SYNC_STATE = 'off'; SYNC_LAST = null;
+          render(); toast('Sesión cerrada (los datos siguen en este navegador)');
+        }
+      })
+    ));
+    card.appendChild(el('p', { class: 'tiny muted', style: { marginTop: '8px' }, text: 'El SQL para crear la tabla está en supabase/schema.sql del repositorio. Cada persona ve solo sus filas.' }));
+    return card;
   }
 
   function dataCard() {
@@ -2685,6 +2864,7 @@
     if (['hoy', 'semana', 'programa', 'progreso', 'ajustes', 'bloque'].indexOf(hash) >= 0) TAB = hash;
 
     setupPWA();
+    initSync();
 
     save(true);
     const params = new URLSearchParams(location.search);
@@ -2692,6 +2872,9 @@
     if (new URLSearchParams(location.search).get('selftest') === '1') return runSelfTest();
     if (new URLSearchParams(location.search).get('demo') === '1') seedDemo();
     render();
+    if (SYNC_CLIENT && SYNC_CLIENT.session()) {
+      syncNow().catch(function (e) { SYNC_STATE = 'error'; SYNC_ERR = e.message; renderSyncChip(); });
+    }
   }
 
   /* ------------------------------------------------------------------ *

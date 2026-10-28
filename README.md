@@ -194,6 +194,8 @@ Verifica manifiesto, iconos, instalabilidad, service worker y que la app abre si
 │   ├── engine.js               lógica pura: volumen, tonelaje, progresión, fases
 │   └── app.js                  interfaz
 ├── tests/engine.test.mjs       27 pruebas del motor
+├── tests/sync.test.mjs         7 pruebas del cliente de sincronización
+├── supabase/schema.sql         tabla y políticas RLS
 ├── tools/
 │   ├── e2e.mjs                 38 pruebas de interacción en Chrome real
 │   ├── shot.mjs                capturas con emulación de móvil
@@ -212,7 +214,7 @@ Requiere Node ≥ 20 (sin dependencias).
 ```bash
 npm run build   # regenera index.html y sw.js desde src/
 npm run pack    # genera public/ (app + PWA + PDF) para desplegar
-npm test        # 27 pruebas del motor
+npm test        # 34 pruebas (motor + sincronización)
 npm run e2e     # 38 pruebas de interacción (necesita Chrome)
 npm run pdf     # regenera cuaderno-bloque.pdf (necesita Chrome)
 npm run pwa <url>  # comprueba manifiesto, SW y offline contra una URL
@@ -221,6 +223,28 @@ npm run pwa <url>  # comprueba manifiesto, SW y offline contra una URL
 `index.html` está versionado a propósito: así GitHub Pages lo sirve sin construir nada. La CI falla si lo editas sin reconstruirlo.
 
 El motor (`src/engine.js`) no toca el DOM ni el almacenamiento: se puede probar con `node --test` y se inyecta en la interfaz. Por eso la lógica de volumen y progresión está cubierta por pruebas y la parte visual no.
+
+## Sincronización con Supabase (opcional)
+
+Sin cuenta, el cuaderno vive en el navegador. Con cuenta, cada perfil se guarda en **tu** Supabase y se abre igual desde el móvil.
+
+**Pasos (5 minutos, una vez):**
+
+1. Crea un proyecto nuevo en [supabase.com](https://supabase.com) (plan gratuito). Mejor uno dedicado a esto, no reutilices el de otro proyecto.
+2. En *SQL Editor → New query*, pega [`supabase/schema.sql`](supabase/schema.sql) y pulsa **Run**. Crea la tabla `profiles` y las políticas de acceso.
+3. En *Project Settings → API*, copia **Project URL** y la **anon public key**.
+4. En la app: *Ajustes → Cuenta y sincronización*, pega ambas y **Guardar configuración**.
+5. **Crear cuenta** con correo y contraseña. Si el proyecto pide confirmar el correo, confírmalo y luego **Entrar**.
+6. Repite el paso 4 en el otro dispositivo y entra con la misma cuenta.
+
+**Cómo funciona:**
+
+- Cada perfil viaja como **una fila** (id, nombre y todo su estado en JSONB). Al guardar, sube 4 s después; al abrir, baja lo que sea más reciente.
+- Conflictos: gana el último guardado **por perfil**. No hay fusión por campo, y es deliberado: dos personas editando la misma sesión a la vez es raro y una fusión automática puede corromper series.
+- La **anon key es pública** por diseño; lo que protege los datos son las políticas RLS (`auth.uid() = user_id`). La **service role key** no se usa nunca en la app.
+- Si cierras sesión, los datos siguen en el navegador; si cambias de proyecto, se vuelve a modo local.
+
+**Sin red** la app sigue funcionando: escribe en local y sincroniza cuando vuelve la conexión.
 
 ## Datos y privacidad
 
