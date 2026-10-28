@@ -1020,6 +1020,7 @@
     hl.appendChild(el('p', { text: ph.note }));
     head.appendChild(hl);
     head.appendChild(el('div', { class: 'row tight' },
+      el('button', { class: 'btn sm', text: 'Resumen', onclick: () => openWeekReport(dates[0]) }),
       el('button', { class: 'btn sm', text: '←', 'aria-label': 'semana anterior', onclick: () => { WEEK_OFFSET--; render(); } }),
       el('button', { class: 'btn sm', text: 'Hoy', onclick: () => { WEEK_OFFSET = 0; render(); } }),
       el('button', { class: 'btn sm', text: '→', 'aria-label': 'semana siguiente', onclick: () => { WEEK_OFFSET++; render(); } })
@@ -1539,6 +1540,7 @@
     hl.appendChild(el('p', { text: 'En déficit el progreso se mide en repeticiones a la misma carga, no en kilos añadidos. Aquí está lo que llevas y lo que toca.' }));
     head.appendChild(hl);
     head.appendChild(el('div', { class: 'row tight' },
+      el('button', { class: 'btn sm primary', text: 'Resumen semanal', onclick: () => openWeekReport() }),
       el('button', { class: 'btn sm', text: 'Exportar CSV', onclick: exportCSV }),
       el('button', { class: 'btn sm', text: 'Copia .json', onclick: exportJSON })
     ));
@@ -2019,6 +2021,69 @@
       { label: 'Guardar', primary: true, onClick: () => { const v = input.value.trim(); if (v) onOk(v); } }
     ]);
     setTimeout(() => { input.focus(); input.select(); }, 60);
+  }
+
+  function openWeekReport(weekStartISO) {
+    const r = CE.weekReport(S, weekStartISO || CE.toISODate(CE.mondayOf(todayISO())), EX);
+    const text = CE.reportText(r);
+    const body = el('div', { class: 'stack' });
+
+    body.appendChild(el('div', { class: 'row between' },
+      el('div', {},
+        el('div', { class: 'kicker', text: 'Semana ' + r.weekNumber + ' · ' + r.phase.name }),
+        el('div', { class: 'tiny muted', text: shortDate(r.weekStart) + ' – ' + shortDate(CE.toISODate(CE.addDays(r.weekStart, 6))) })
+      )
+    ));
+
+    const stats = el('div', { class: 'grid three' });
+    stats.appendChild(el('div', { class: 'stat' }, el('span', { class: 'v', text: r.sessions.done + '/' + r.sessions.planned }), el('span', { class: 'k', text: 'sesiones' })));
+    stats.appendChild(el('div', { class: 'stat' }, el('span', { class: 'v', text: r.sets.pct + ' %' }), el('span', { class: 'k', text: 'series' }), el('span', { class: 'd', text: r.sets.done + ' de ' + r.sets.planned })));
+    stats.appendChild(el('div', { class: 'stat' },
+      el('span', { class: 'v', text: tn(r.tonnage.done) }),
+      el('span', { class: 'k', text: 'tonelaje' }),
+      el('span', { class: 'd ' + (r.tonnage.delta == null ? '' : r.tonnage.delta >= 0 ? 'green' : 'amber'), text: r.tonnage.delta == null ? 'sin semana previa' : (r.tonnage.delta >= 0 ? '+' : '') + Math.round(r.tonnage.delta * 100) + ' % vs anterior' })
+    ));
+    body.appendChild(stats);
+
+    const vol = el('div', {});
+    vol.appendChild(el('div', { class: 'card-title', style: { marginTop: '4px' } }, el('h3', { text: 'Volumen por músculo' }), el('span', { class: 'meta', text: 'series efectivas' })));
+    r.volume.filter(function (v) { return v.total > 0; }).forEach(function (v) {
+      vol.appendChild(el('div', { class: 'row between', style: { padding: '4px 0', borderBottom: '1px solid var(--line)' } },
+        el('span', { class: 'tiny', text: v.label }),
+        el('span', { class: 'tiny ' + (v.status === 'ok' ? 'green' : v.status === 'low' ? 'amber' : 'red'), text: v.total + ' · ' + v.range[0] + '–' + v.range[1] })
+      ));
+    });
+    body.appendChild(vol);
+
+    if (r.progress.length) {
+      body.appendChild(el('div', {},
+        el('div', { class: 'card-title' }, el('h3', { text: 'Han subido' })),
+        ...r.progress.map(function (p) {
+          return el('div', { class: 'tiny', text: '↑ ' + p.name + ' · ' + Math.round(p.pct * 100) + ' % de e1RM (' + kg(p.from) + ' → ' + kg(p.to) + ')' });
+        })
+      ));
+    }
+    if (r.stalled.length) {
+      body.appendChild(el('div', {},
+        el('div', { class: 'card-title' }, el('h3', { text: 'Han bajado' })),
+        ...r.stalled.map(function (p) { return el('div', { class: 'tiny amber', text: '↓ ' + p.name }); })
+      ));
+    }
+
+    const extra = [];
+    if (r.readiness.avg != null) extra.push('Preparación ' + r.readiness.avg + '/100');
+    if (r.cardio.planned) extra.push('Cardio ' + r.cardio.done + '/' + r.cardio.planned);
+    if (r.weight) extra.push('Peso ' + kg(r.weight.now) + ' kg' + (r.weight.prev ? ' (' + (r.weight.now - r.weight.prev >= 0 ? '+' : '') + kg(r.weight.now - r.weight.prev) + ')' : ''));
+    if (extra.length) body.appendChild(el('div', { class: 'row tight' }, extra.map(function (t) { return el('span', { class: 'chip', text: t }); })));
+
+    body.appendChild(el('div', { class: 'card-title', style: { marginTop: '6px' } }, el('h3', { text: 'Texto para entregar' })));
+    body.appendChild(el('pre', { class: 'sql', style: { maxHeight: '180px' }, text: text }));
+
+    openSheet('Resumen semanal', 'Lo que has hecho y cómo', body, [
+      { label: 'Copiar texto', ghost: true, onClick: () => copyText(text).then(function (ok) { toast(ok ? 'Resumen copiado' : 'No se pudo copiar'); }) },
+      { label: 'Descargar .txt', ghost: true, onClick: () => { download('resumen-semana-' + r.weekNumber + '.txt', text); toast('Descargado'); } },
+      { label: 'Cerrar', onClick: closeSheet }
+    ]);
   }
 
   function openProfiles() {

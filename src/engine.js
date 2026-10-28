@@ -1200,6 +1200,127 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
   }
 
   /* ------------------------------------------------------------------ *
+   * 8.e Resumen semanal
+   * ------------------------------------------------------------------ */
+  function bestE1rm(logs, exId, dates) {
+    let best = 0;
+    dates.forEach(function (d) {
+      const e = logs[d] && logs[d].entries && logs[d].entries[exId];
+      if (!e || !e.sets) return;
+      e.sets.forEach(function (st) {
+        if (st && st.reps > 0 && st.load > 0) {
+          const v = e1rm(st.load, st.reps);
+          if (v > best) best = v;
+        }
+      });
+    });
+    return best;
+  }
+
+  function weekReport(state, weekStartISO, exMap) {
+    const ex = exMap || getExMap(state.custom);
+    const ws = mondayOf(weekStartISO);
+    const days = [];
+    const prevDays = [];
+    for (let i = 0; i < 7; i++) {
+      days.push(toISODate(addDays(ws, i)));
+      prevDays.push(toISODate(addDays(addDays(ws, -7), i)));
+    }
+    const program = state.program || { days: [] };
+    const byWeekday = {};
+    program.days.forEach(function (d) { byWeekday[d.weekday] = d; });
+
+    let plannedSets = 0, plannedTon = 0, doneSets = 0, doneTon = 0;
+    let plannedSessions = 0, doneSessions = 0;
+    const readiness = [];
+
+    days.forEach(function (dateISO) {
+      const jsDay = parseDate(dateISO).getDay();
+      const wd = jsDay === 0 ? 7 : jsDay;
+      const d = byWeekday[wd];
+      if (d) {
+        const st = sessionStats(d, state.loads, ex);
+        plannedSets += st.sets;
+        plannedTon += st.tonnage;
+        plannedSessions += 1;
+      }
+      const L = state.logs[dateISO];
+      if (L) {
+        const n = logSets(L);
+        if (n > 0 && d) doneSessions += 1;
+        doneSets += n;
+        doneTon += logTonnage(L);
+        if (L.readiness && typeof L.readiness.score === 'number') readiness.push(L.readiness.score);
+      }
+    });
+
+    let prevTon = 0;
+    prevDays.forEach(function (d) { const L = state.logs[d]; if (L) prevTon += logTonnage(L); });
+
+    let cardioPlanned = 0, cardioDone = 0;
+    if (state.cardio && state.cardio.hiit > 0) {
+      cardioPlanned = state.cardio.hiit;
+      days.forEach(function (d) { if (state.cardioLog && state.cardioLog[d] && state.cardioLog[d].done) cardioDone += 1; });
+    }
+
+    const progress = [];
+    const stalled = [];
+    const seen = {};
+    program.days.forEach(function (d) {
+      d.slots.forEach(function (slot) {
+        if (seen[slot.ex]) return;
+        seen[slot.ex] = 1;
+        const cur = bestE1rm(state.logs, slot.ex, days);
+        const prev = bestE1rm(state.logs, slot.ex, prevDays);
+        const e = exOf(slot.ex, ex);
+        if (cur && prev && prev > 0) {
+          const pct = (cur - prev) / prev;
+          if (pct > 0.01) progress.push({ name: e.name, from: round1(prev), to: round1(cur), pct: pct });
+          else if (pct < -0.01) stalled.push({ name: e.name, pct: pct });
+        }
+      });
+    });
+
+    const vol = volumeRows(volumeOf(program, ex));
+    const meas = (state.measurements || []).filter(function (m) { return m.weight; });
+    const lastWeight = meas.length ? meas[meas.length - 1] : null;
+    const prevWeight = meas.length > 1 ? meas[meas.length - 2] : null;
+    const avgReady = readiness.length ? Math.round(readiness.reduce(function (a, b) { return a + b; }, 0) / readiness.length) : null;
+    const weekNo = weekNumber(state.block.start, toISODate(ws));
+    const phase = phaseForWeek(weekNo);
+    const pctDone = plannedSets ? Math.round((doneSets / plannedSets) * 100) : 0;
+    const tonDelta = prevTon ? (doneTon - prevTon) / prevTon : null;
+
+    return {
+      weekStart: toISODate(ws), weekNumber: weekNo, phase: phase,
+      sessions: { planned: plannedSessions, done: doneSessions },
+      sets: { planned: plannedSets, done: doneSets, pct: pctDone },
+      tonnage: { planned: Math.round(plannedTon), done: Math.round(doneTon), prev: Math.round(prevTon), delta: tonDelta },
+      readiness: { avg: avgReady, n: readiness.length },
+      cardio: { planned: cardioPlanned, done: cardioDone },
+      volume: vol,
+      progress: progress.slice(0, 5),
+      stalled: stalled.slice(0, 5),
+      weight: lastWeight ? { now: lastWeight.weight, prev: prevWeight ? prevWeight.weight : null } : null
+    };
+  }
+
+  function reportText(r) {
+    const lines = [];
+    lines.push('Semana ' + r.weekNumber + ' · ' + r.phase.name);
+    lines.push('Sesiones: ' + r.sessions.done + '/' + r.sessions.planned + ' · series ' + r.sets.done + '/' + r.sets.planned + ' (' + r.sets.pct + ' %)');
+    lines.push('Tonelaje: ' + r.tonnage.done + ' kg' + (r.tonnage.delta != null ? ' (' + (r.tonnage.delta >= 0 ? '+' : '') + Math.round(r.tonnage.delta * 100) + ' % vs semana anterior)' : ''));
+    if (r.readiness.avg != null) lines.push('Preparación media: ' + r.readiness.avg + '/100');
+    if (r.cardio.planned) lines.push('Cardio: ' + r.cardio.done + '/' + r.cardio.planned);
+    if (r.weight) lines.push('Peso: ' + r.weight.now + ' kg' + (r.weight.prev ? ' (' + (r.weight.now - r.weight.prev >= 0 ? '+' : '') + round1(r.weight.now - r.weight.prev) + ' kg)' : ''));
+    const low = r.volume.filter(function (v) { return v.status === 'low'; });
+    if (low.length) lines.push('Por debajo del rango: ' + low.map(function (v) { return v.label + ' ' + v.total; }).join(', '));
+    if (r.progress.length) lines.push('Suben: ' + r.progress.map(function (p) { return p.name + ' (+' + Math.round(p.pct * 100) + ' %)'; }).join(', '));
+    if (r.stalled.length) lines.push('Bajan: ' + r.stalled.map(function (p) { return p.name; }).join(', '));
+    return lines.join('\n');
+  }
+
+  /* ------------------------------------------------------------------ *
    * 9. Cuestionario de preparación → 0–100 y semáforo
    * ------------------------------------------------------------------ */
   const READINESS_ITEMS = [
@@ -1511,6 +1632,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     round1: round1, roundTo: roundTo, selfTest: selfTest,
     REPS_BAND: REPS_BAND, repsBandFor: repsBandFor, clampRepsFor: clampRepsFor, EXPERIENCE_FACTOR: EXPERIENCE_FACTOR,
     e1rm: e1rm, exerciseHistory: exerciseHistory, stagnation: stagnation, projectBlock: projectBlock,
+    weekReport: weekReport, reportText: reportText, bestE1rm: bestE1rm,
     swapOptions: swapOptions, sessionRedundancy: sessionRedundancy, movementFamily: movementFamily,
     cycleInfo: cycleInfo, cycleAdjustment: cycleAdjustment, cyclePattern: cyclePattern, CYCLE_PHASE_LABEL: CYCLE_PHASE_LABEL, daysBetween: daysBetween,
     CARDIO_PROTOCOLS: CARDIO_PROTOCOLS, lowerDays: lowerDays, suggestCardioDay: suggestCardioDay, cardioWarnings: cardioWarnings, dayDistance: dayDistance,

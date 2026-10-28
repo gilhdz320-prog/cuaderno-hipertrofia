@@ -205,6 +205,16 @@ await sleep(600);
 check('al guardar configuración pide correo y contraseña', (await ev("document.querySelectorAll('input[type=password]').length")) >= 1);
 check('la sincronización no rompe el guardado local', (await ev("(function(){try{var raw=localStorage.getItem('cuaderno.v3');return !!raw && !!JSON.parse(raw).profiles}catch(e){return false}})()")) === true);
 
+/* ---------- resumen semanal ---------- */
+await ev("document.querySelector('[data-tab=semana]').click()");
+await sleep(500);
+await ev("[...document.querySelectorAll('button')].find(function(b){return b.textContent==='Resumen'}).click()");
+await sleep(500);
+check('abre el resumen semanal', (await ev("document.body.textContent.indexOf('Texto para entregar') >= 0")) === true);
+check('el resumen trae texto', /Semana \d/.test(await ev("document.querySelector('#sheet pre').textContent")), await ev("document.querySelector('#sheet pre').textContent.split('\\n')[0]"));
+await ev("[...document.querySelectorAll('.sheet-actions button')].find(function(b){return b.textContent==='Cerrar'}).click()");
+await sleep(300);
+
 check('sin excepciones de JavaScript', exceptions.length === 0, exceptions.join(' | '));
 
 console.log(JSON.stringify(results.map(r => (r.pass ? 'PASS ' : 'FAIL ') + r.name + (r.detail ? '  [' + r.detail + ']' : '')), null, 1));
