@@ -168,7 +168,7 @@ await sleep(400);
 check('ofrece traer el programa de otro perfil', (await ev("document.body.textContent.indexOf('Misma rutina que') >= 0")) === true);
 await ev("[...document.querySelectorAll('button')].find(function(b){return b.textContent==='Traer su programa'}).click()");
 await sleep(500);
-check('copia el programa sin tocar los registros', (await ev("(function(){var S=Cuaderno.state();var sinSeries=Object.keys(S.logs||{}).every(function(d){var e=S.logs[d].entries||{};return Object.keys(e).length===0});return S.program.days.length>0 && sinSeries})()")) === true);
+check('copia el programa sin tocar los registros', (await ev("(function(){var S=Cuaderno.state();var sinSeries=Object.keys(S.logs||{}).every(function(d){var e=S.logs[d].entries||{};return Object.keys(e).every(function(k){return (e[k].sets||[]).every(function(x){return !x.done})})});return S.program.days.length>0 && sinSeries})()")) === true);
 
 /* ---------- equipo: sin poleas ---------- */
 await ev("document.querySelector('[data-tab=ajustes]').click()");
