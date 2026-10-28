@@ -469,11 +469,14 @@
         el('span', { text: 'Las series de hoy están a la mitad (' + Math.round(ph.volume * 100) + ' %). La carga se mantiene y el RIR objetivo sube a ' + ph.rir + '. ' + ph.note })
       ));
     }
-    if (L.modifier) {
+    if (L.modifier || L.setDelta) {
+      const bits = [];
+      if (L.modifier) bits.push('carga ' + L.modifier + ' %');
+      if (L.setDelta) bits.push(L.setDelta + ' series');
       wrap.appendChild(el('div', { class: 'banner' },
-        el('b', { text: 'Sesión al ' + L.modifier + ' %. ' }),
-        el('span', { text: 'Se aplicó «hoy está muy pesado». La carga base no cambia.' }),
-        el('button', { class: 'btn sm ghost', text: 'quitar', onclick: () => { L.modifier = 0; save(); render(); } })
+        el('b', { text: 'Sesión ajustada: ' + bits.join(' y ') + '. ' }),
+        el('span', { text: 'Por cómo llegas hoy o por el ciclo. El programa y la carga base no cambian.' }),
+        el('button', { class: 'btn sm ghost', text: 'quitar ajuste', onclick: () => { L.modifier = 0; L.setDelta = 0; save(); render(); } })
       ));
     }
 
@@ -894,6 +897,10 @@
           const r = CE.readiness(scaled);
           r.answers = answers;
           L.readiness = r;
+          /* aplica el ajuste del día: carga y series */
+          const adj = CE.cycleAdjustment(null, L.cycle || {}, r);
+          L.modifier = adj.loadPct;
+          L.setDelta = Math.min(L.setDelta || 0, adj.setDelta);
           S.logs[date] = L;
           save(); closeSheet(); render();
           toast('Preparación: ' + r.score + '/100');
@@ -2165,6 +2172,32 @@
       })
     ));
     card.appendChild(el('p', { class: 'tiny muted', style: { marginTop: '6px' }, text: 'Las cargas son una estimación a partir de tu peso corporal y tu experiencia (banca ≈ 0,40 × peso; hip thrust ≈ 1,10 ×; lateral ≈ 0,05 ×). En cuanto registras una serie, manda tu dato.' }));
+
+    const otros = profileList().filter(function (p) { return p.id !== S.id; });
+    if (otros.length) {
+      const sel = el('select', { style: { maxWidth: '240px' } });
+      otros.forEach(function (p) { sel.appendChild(el('option', { value: p.id, text: p.name || 'Atleta' })); });
+      card.appendChild(el('hr', { class: 'sep' }));
+      card.appendChild(el('div', { class: 'row', style: { alignItems: 'flex-end' } },
+        el('label', { class: 'fld' }, 'Misma rutina que', sel),
+        el('button', {
+          class: 'btn sm', text: 'Traer su programa',
+          onclick: () => {
+            const src = DB.profiles[sel.value];
+            if (!src || !src.program) { toast('Ese perfil no tiene programa'); return; }
+            S.program = JSON.parse(JSON.stringify(src.program));
+            S.block.freq = src.block.freq;
+            const fresh = CE.seedLoads(S);
+            Object.keys(fresh).forEach(function (exId) {
+              if (!CE.lastEntryFor(S.logs, exId)) S.loads[exId] = fresh[exId];
+            });
+            save(true); render();
+            toast('Programa copiado · tus cargas se calculan con tu peso');
+          }
+        })
+      ));
+      card.appendChild(el('p', { class: 'tiny muted', style: { marginTop: '6px' }, text: 'Copia ejercicios, series, repeticiones y RIR. Tus cargas y tus registros no se tocan: se recalculan con tu peso y tu experiencia.' }));
+    }
     return card;
   }
 

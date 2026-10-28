@@ -74,6 +74,8 @@ check('calcula la puntuación al responder', /\d+\/100/.test(preview), preview);
 await ev("[...document.querySelectorAll('.sheet-actions button')].find(b=>/Guardar|Crear/.test(b.textContent)).click()");
 await sleep(400);
 check('guarda la preparación', /Preparación \d+\/100/.test(await ev("document.body.textContent")), await ev("(document.querySelector('.card .chip')||{}).textContent"));
+const preps = await ev("(function(){var S=Cuaderno.state();var k=Object.keys(S.logs)[0];return JSON.stringify({mod:S.logs[k].modifier,delta:S.logs[k].setDelta})})()");
+check('la preparación ajusta la sesión de hoy', JSON.parse(preps).mod < 0 || JSON.parse(preps).delta < 0, preps);
 
 /* marcar una serie */
 const before = await ev("document.querySelector('.ex .set-row input').value");
@@ -133,6 +135,12 @@ await sleep(600);
 check('crea y activa el perfil nuevo', (await ev("document.getElementById('profileName').textContent")) === 'Prueba', await ev("document.getElementById('profileName').textContent"));
 check('el perfil nuevo empieza sin registros', (await ev("Object.keys(Cuaderno.state().logs).length")) === 0);
 check('el perfil nuevo tiene su propio programa', (await ev("Cuaderno.state().program.days.length")) >= 2, await ev("Cuaderno.state().program.days.length"));
+await ev("document.querySelector('[data-tab=ajustes]').click()");
+await sleep(400);
+check('ofrece traer el programa de otro perfil', (await ev("document.body.textContent.indexOf('Misma rutina que') >= 0")) === true);
+await ev("[...document.querySelectorAll('button')].find(function(b){return b.textContent==='Traer su programa'}).click()");
+await sleep(500);
+check('copia el programa sin tocar los registros', (await ev("(function(){var S=Cuaderno.state();var otros=Object.values(S.profiles||{});return S.program.days.length>0 && Object.keys(S.logs||{}).length===0})()")) === true);
 
 /* ---------- equipo: sin poleas ---------- */
 await ev("document.querySelector('[data-tab=ajustes]').click()");
