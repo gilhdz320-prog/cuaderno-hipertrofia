@@ -1257,7 +1257,8 @@
       card.appendChild(title);
       card.appendChild(el('div', { class: 'slot-head' },
         el('span', { text: 'Ejercicio' }), el('span', { class: 'c', text: 'Series' }), el('span', { class: 'c', text: 'Reps' }),
-        el('span', { class: 'c', text: 'RIR' }), el('span', { class: 'c', text: 'Descanso (s)' }), el('span', {})
+        el('span', { class: 'c', text: 'RIR' }), el('span', { class: 'c', text: 'Descanso (s)' }),
+        el('span', { class: 'c', text: 'Carga (kg)' }), el('span', {})
       ));
       day.slots.forEach((slot, si) => card.appendChild(slotEditor(day, slot, si)));
       wrap.appendChild(card);
@@ -1320,7 +1321,29 @@
     [0, 1, 1.5, 2, 2.5, 3, 4].forEach(v => rir.appendChild(el('option', { value: v, text: 'RIR ' + v, selected: v === slot.rir ? true : null })));
     row.appendChild(rir);
 
-    row.appendChild(el('input', { type: 'number', min: '0', step: '15', value: slot.rest || ex.rest, 'aria-label': 'descanso en segundos', title: 'descanso en segundos', title: 'Descanso entre series, en segundos. 180 = 3:00', placeholder: 'seg', onchange: (ev) => { slot.rest = num(ev.target.value); save(); render(); } }));
+    row.appendChild(el('input', {
+      type: 'number', min: '0', step: '15', value: slot.rest || ex.rest,
+      'aria-label': 'descanso en segundos', title: 'Descanso entre series, en segundos. 180 = 3:00', placeholder: 'seg',
+      onchange: (ev) => { slot.rest = num(ev.target.value); save(); render(); }
+    }));
+
+    /* carga de trabajo: la que usas de verdad, no una estimación */
+    row.appendChild(el('input', {
+      type: 'number', min: '0', step: String(ex.step || 2.5),
+      value: Math.round((S.loads[slot.ex] || 0) * 100) / 100,
+      'aria-label': 'carga de trabajo en kilos',
+      title: 'Carga base de este ejercicio en kilos',
+      onchange: (ev) => {
+        const v = num(ev.target.value);
+        S.loads[slot.ex] = v;
+        Object.keys(S.logs || {}).forEach(function (d) {
+          const e = S.logs[d] && S.logs[d].entries && S.logs[d].entries[slot.ex];
+          if (e && e.sets) e.sets.forEach(function (st) { if (!st.done) st.load = v; });
+        });
+        save(true); render();
+        toast(CE.exOf(slot.ex, EX).name + ': ' + kg(v) + ' kg');
+      }
+    }));
 
     const tools = el('div', { class: 'row tight', style: { gap: '2px' } });
     tools.appendChild(el('button', { class: 'btn icon ghost', text: '↑', title: 'subir', disabled: si === 0, onclick: () => { swapSlots(day, si, si - 1); } }));

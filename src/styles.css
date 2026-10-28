@@ -505,7 +505,7 @@ label.btn { cursor: pointer; }
 /* ---------- editor de programa ---------- */
 .slot-edit {
   display: grid;
-  grid-template-columns: minmax(140px, 2.2fr) 104px 128px 100px 72px auto;
+  grid-template-columns: minmax(120px, 1.9fr) 92px 116px 90px 66px 84px auto;
   gap: 6px; align-items: center;
   padding: 7px 0; border-bottom: 1px solid var(--line);
 }
@@ -611,7 +611,7 @@ details[open] > summary::before { content: "▾ "; }
 /* cabecera de columnas del editor de programa */
 .slot-head {
   display: grid;
-  grid-template-columns: minmax(140px, 2.2fr) 104px 128px 100px 72px auto;
+  grid-template-columns: minmax(120px, 1.9fr) 92px 116px 90px 66px 84px auto;
   gap: 6px; align-items: center;
   padding: 4px 0 6px; border-bottom: 1px solid var(--line);
   font-size: .62rem; font-weight: 650; text-transform: uppercase; letter-spacing: .09em; color: var(--muted);

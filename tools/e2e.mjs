@@ -111,6 +111,10 @@ check('el glúteo sigue alto', await ev("(function(){var t=document.body.textCon
 await ev("document.querySelector('[data-tab=programa]').click()");
 await sleep(500);
 check('editor con filas', await ev("document.querySelectorAll('.slot-edit').length") > 5, await ev("document.querySelectorAll('.slot-edit').length"));
+const exId = await ev("document.querySelector('.slot-edit select').value");
+const cargaOk = await ev("(function(){var row=document.querySelector('.slot-edit'); var ins=row.querySelectorAll('input'); var last=ins[ins.length-1]; last.value='99'; last.dispatchEvent(new Event('change')); return 1})()");
+await sleep(500);
+check('la carga se edita desde Programa', String(await ev("Cuaderno.state().loads[" + JSON.stringify(exId) + "]")) === '99', exId + ' = ' + await ev("Cuaderno.state().loads[" + JSON.stringify(exId) + "]"));
 const setsBefore = await ev("document.querySelector('.slot-edit .stepper .val').textContent");
 await ev("document.querySelector('.slot-edit .stepper button:last-child').click()");
 await sleep(400);
