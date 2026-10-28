@@ -2023,9 +2023,49 @@
     setTimeout(() => { input.focus(); input.select(); }, 60);
   }
 
+  let REPORT_STATE = null;
+
+  async function runRedaction() {
+    if (!REPORT_STATE) return;
+    if (!aiKey()) { toast('Falta la clave de OpenAI: Ajustes → Asistente'); return; }
+    REPORT_STATE.busy = true; REPORT_STATE.error = null;
+    openWeekReport(REPORT_STATE.weekStart);
+    try {
+      const r = REPORT_STATE.r;
+      const weeks = CE.weeklySummary(S, EX).slice(-4);
+      const system = [
+        'Eres entrenador de hipertrofia. Redactas el resumen semanal de un atleta.',
+        'Escribe 6 a 9 líneas en español, en párrafos cortos, tono directo y humano. Sin listas, sin disclaimers.',
+        'Estructura: qué hizo esta semana, cómo va el volumen frente a los rangos, qué mejoró, qué vigilar y UNA recomendación concreta para la próxima semana.',
+        'No inventes cifras: usa solo los datos que te doy. Si falta un dato, no lo menciones.'
+      ].join('\n');
+      const user = JSON.stringify({
+        semana: { numero: r.weekNumber, fase: r.phase.name, inicio: r.weekStart },
+        sesiones: r.sessions, series: r.sets, tonelaje: r.tonnage,
+        preparacion: r.readiness, cardio: r.cardio, peso: r.weight,
+        volumen_por_musculo: r.volume.map(function (v) { return { musculo: v.label, series: v.total, rango: v.range, estado: v.status }; }),
+        suben: r.progress, bajan: r.stalled,
+        ultimas_semanas: weeks,
+        perfil: { peso: S.athlete.weightKg, dias: S.block.freq, objetivo: 'déficit' }
+      });
+      const raw = await aiChat([{ role: 'system', content: system }, { role: 'user', content: user }], { temperature: 0.5 });
+      REPORT_STATE.ai = String(raw).trim();
+    } catch (e) {
+      REPORT_STATE.error = e.message || String(e);
+    }
+    REPORT_STATE.busy = false;
+    openWeekReport(REPORT_STATE.weekStart);
+  }
+
   function openWeekReport(weekStartISO) {
-    const r = CE.weekReport(S, weekStartISO || CE.toISODate(CE.mondayOf(todayISO())), EX);
+    const ws = weekStartISO || CE.toISODate(CE.mondayOf(todayISO()));
+    const r = CE.weekReport(S, ws, EX);
     const text = CE.reportText(r);
+    if (!REPORT_STATE || REPORT_STATE.weekStart !== r.weekStart) {
+      REPORT_STATE = { weekStart: r.weekStart, r: r, ai: null, busy: false, error: null };
+    } else {
+      REPORT_STATE.r = r;
+    }
     const body = el('div', { class: 'stack' });
 
     body.appendChild(el('div', { class: 'row between' },
@@ -2076,13 +2116,29 @@
     if (r.weight) extra.push('Peso ' + kg(r.weight.now) + ' kg' + (r.weight.prev ? ' (' + (r.weight.now - r.weight.prev >= 0 ? '+' : '') + kg(r.weight.now - r.weight.prev) + ')' : ''));
     if (extra.length) body.appendChild(el('div', { class: 'row tight' }, extra.map(function (t) { return el('span', { class: 'chip', text: t }); })));
 
+    if (!aiKey()) {
+      body.appendChild(el('div', { class: 'banner', style: { marginTop: '10px' } },
+        el('b', { text: 'Versión redactada: ' }),
+        el('span', { text: 'necesita tu clave de OpenAI. Está en Ajustes → Asistente.' })
+      ));
+    } else if (REPORT_STATE.busy) {
+      body.appendChild(el('div', { class: 'banner', style: { marginTop: '10px' } }, el('span', { text: 'Redactando el resumen…' })));
+    } else if (REPORT_STATE.error) {
+      body.appendChild(el('div', { class: 'banner bad', style: { marginTop: '10px' } }, el('span', { text: 'No se pudo redactar: ' + REPORT_STATE.error })));
+    } else if (REPORT_STATE.ai) {
+      body.appendChild(el('div', { class: 'card-title', style: { marginTop: '6px' } }, el('h3', { text: 'Redactado por el asistente' })));
+      body.appendChild(el('div', { class: 'ai-out', text: REPORT_STATE.ai }));
+    }
+
     body.appendChild(el('div', { class: 'card-title', style: { marginTop: '6px' } }, el('h3', { text: 'Texto para entregar' })));
     body.appendChild(el('pre', { class: 'sql', style: { maxHeight: '180px' }, text: text }));
 
+    const salida = REPORT_STATE.ai ? (text + '\n\n---\n' + REPORT_STATE.ai) : text;
     openSheet('Resumen semanal', 'Lo que has hecho y cómo', body, [
-      { label: 'Copiar texto', ghost: true, onClick: () => copyText(text).then(function (ok) { toast(ok ? 'Resumen copiado' : 'No se pudo copiar'); }) },
-      { label: 'Descargar .txt', ghost: true, onClick: () => { download('resumen-semana-' + r.weekNumber + '.txt', text); toast('Descargado'); } },
-      { label: 'Cerrar', onClick: closeSheet }
+      { label: REPORT_STATE.busy ? 'Redactando…' : 'Versión redactada', primary: true, ghost: false, onClick: runRedaction },
+      { label: 'Copiar', ghost: true, onClick: () => copyText(salida).then(function (ok) { toast(ok ? 'Resumen copiado' : 'No se pudo copiar'); }) },
+      { label: '.txt', ghost: true, onClick: () => { download('resumen-semana-' + r.weekNumber + '.txt', salida); toast('Descargado'); } },
+      { label: 'Cerrar', ghost: true, onClick: closeSheet }
     ]);
   }
 
@@ -2898,7 +2954,9 @@
     try {
       const weeks = CE.weeklySummary(S, EX).slice(-4);
       const vol = CE.volumeRows(CE.volumeOf(S.program, EX));
+      const wk = CE.weekReport(S, CE.toISODate(CE.mondayOf(todayISO())), EX);
       const payload = {
+        semana_actual: { sesiones: wk.sessions, series: wk.sets, tonelaje: wk.tonnage, preparacion: wk.readiness, suben: wk.progress, bajan: wk.stalled, volumen: wk.volume.filter(function (v) { return v.total > 0; }) },
         perfil: Math.round(S.athlete.weightKg) + ' kg, ' + S.athlete.kcal + ' kcal, déficit',
         dias: S.block.freq,
         material: S.equipment,

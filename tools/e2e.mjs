@@ -212,6 +212,9 @@ await ev("[...document.querySelectorAll('button')].find(function(b){return b.tex
 await sleep(500);
 check('abre el resumen semanal', (await ev("document.body.textContent.indexOf('Texto para entregar') >= 0")) === true);
 check('el resumen trae texto', /Semana \d/.test(await ev("document.querySelector('#sheet pre').textContent")), await ev("document.querySelector('#sheet pre').textContent.split('\\n')[0]"));
+await ev("[...document.querySelectorAll('.sheet-actions button')].find(function(b){return b.textContent==='Versión redactada'}).click()");
+await sleep(400);
+check('sin clave avisa en vez de romper', (await ev("document.body.textContent.indexOf('Ajustes → Asistente') >= 0")) === true);
 await ev("[...document.querySelectorAll('.sheet-actions button')].find(function(b){return b.textContent==='Cerrar'}).click()");
 await sleep(300);
 
