@@ -219,6 +219,11 @@ await ev("[...document.querySelectorAll('button')].find(function(b){return b.tex
 await sleep(500);
 const cicloHist = await ev("(function(){var S=Cuaderno.state();return JSON.stringify({n:(S.cycle.history||[]).length,last:S.cycle.lastStart,end:(S.cycle.history||[])[0]?S.cycle.history[0].end:'x'})})()");
 check('marcar inicio guarda el sangrado y reinicia el ciclo', JSON.parse(cicloHist).n >= 1 && JSON.parse(cicloHist).end === null, cicloHist);
+check('el día de sangrado pide ánimo, fatiga, dolor y fuerza', (await ev("document.querySelectorAll('#view select').length")) >= 4, await ev("document.querySelectorAll('#view select').length"));
+await ev("(function(){var sels=[...document.querySelectorAll('#view select')]; var fat=sels[1]; fat.value='5'; fat.dispatchEvent(new Event('change')); return 1})()");
+await sleep(600);
+const dia = await ev("(function(){var S=Cuaderno.state();var k=Object.keys(S.logs)[0];var c=S.logs[k].cycle||{};return JSON.stringify({fatiga:c.fatigue,mod:S.logs[k].modifier,delta:S.logs[k].setDelta})})()");
+check('guardar la fatiga del día ajusta la sesión', JSON.parse(dia).fatiga === 5 && JSON.parse(dia).delta < 0, dia);
 check('aparece el chequeo del día', (await ev("document.body.textContent.indexOf('¿Cómo va la fuerza hoy?') >= 0")) === true);
 const setsAntes = await ev("(function(){var S=Cuaderno.state(); var s=S.program.days[0]; var n=0; S.program.days.forEach(function(d){d.slots.forEach(function(x){n+=x.sets})}); return n})()");
 await ev("[...document.querySelectorAll('button')].find(function(b){return b.textContent==='Muy baja'}).click()");
