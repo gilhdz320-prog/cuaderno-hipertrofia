@@ -2374,7 +2374,7 @@
 
     if (!cfg.url) {
       const url = el('input', { type: 'text', placeholder: 'https://xxxx.supabase.co', value: '' });
-      const key = el('input', { type: 'text', placeholder: 'anon key (pública)', value: '' });
+      const key = el('input', { type: 'text', placeholder: 'publishable (sb_publishable_…) o anon (eyJ…)', value: '' });
       card.appendChild(el('div', { class: 'grid two' },
         el('label', { class: 'fld' }, 'URL del proyecto', url),
         el('label', { class: 'fld' }, 'anon key', key)
@@ -2410,7 +2410,7 @@
             toast('Proyecto conectado: ahora crea la cuenta');
           }
         }),
-        el('span', { class: 'tiny muted', text: 'La anon key es pública: la protección la pone RLS en la base de datos.' })
+        el('span', { class: 'tiny muted', text: 'Está en Supabase → Settings → API Keys (o en el botón Connect). Es pública; la protección la pone RLS.' })
       ));
       return card;
     }

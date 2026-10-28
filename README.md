@@ -232,7 +232,7 @@ Sin cuenta, el cuaderno vive en el navegador. Con cuenta, cada perfil se guarda 
 
 1. Crea un proyecto nuevo en [supabase.com](https://supabase.com) (plan gratuito). Mejor uno dedicado a esto, no reutilices el de otro proyecto.
 2. En *SQL Editor → New query*, pega [`supabase/schema.sql`](supabase/schema.sql) y pulsa **Run**. Crea la tabla `profiles` y las políticas de acceso.
-3. En *Project Settings → API*, copia **Project URL** y la **anon public key**.
+3. En *Settings → API Keys* (en el panel nuevo ya no existe «Settings → API»), copia **Project URL** y la **publishable key** (`sb_publishable_…`) o la **anon** legacy (`eyJ…`). También aparecen en el botón **Connect** del proyecto.
 4. En la app: *Ajustes → Cuenta y sincronización*, pega ambas y **Guardar configuración**.
 5. **Crear cuenta** con correo y contraseña. Si el proyecto pide confirmar el correo, confírmalo y luego **Entrar**.
 6. Repite el paso 4 en el otro dispositivo y entra con la misma cuenta.
