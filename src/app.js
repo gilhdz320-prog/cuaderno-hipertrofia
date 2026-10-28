@@ -2101,6 +2101,7 @@
     const card = el('div', { class: 'card' });
     card.appendChild(el('div', { class: 'card-title' }, el('h2', { text: 'Perfil' }), el('span', { class: 'meta', text: 'solo este dispositivo' })));
     const name = el('input', { type: 'text', value: S.name || '' });
+    const blockName = el('input', { type: 'text', value: S.block.name || '', placeholder: 'Ej.: Bloque de fuerza · Ana' });
     const weight = el('input', { type: 'number', step: '0.1', value: S.athlete.weightKg });
     const kcal = el('input', { type: 'number', step: '10', value: S.athlete.kcal });
     const pmin = el('input', { type: 'number', step: '0.1', value: S.athlete.proteinMin });
@@ -2110,6 +2111,7 @@
 
     card.appendChild(el('div', { class: 'grid two' },
       el('label', { class: 'fld' }, 'Nombre', name),
+      el('label', { class: 'fld' }, 'Nombre del bloque (aparece arriba)', blockName),
       el('label', { class: 'fld' }, 'Peso corporal (kg)', weight),
       el('label', { class: 'fld' }, 'Calorías diarias', kcal),
       el('label', { class: 'fld' }, 'Proteína mín. (g/kg)', pmin),
@@ -2123,6 +2125,7 @@
         onclick: () => {
           S.name = name.value.trim() || S.name;
           S.athlete.name = S.name;
+          S.block.name = blockName.value.trim() || S.block.name;
           S.athlete.weightKg = num(weight.value) || S.athlete.weightKg;
           S.athlete.kcal = num(kcal.value) || S.athlete.kcal;
           S.athlete.proteinMin = num(pmin.value) || S.athlete.proteinMin;
@@ -2436,7 +2439,16 @@
           const rec = await syncNow();
           toast('Conectado · ' + rec.toLocal.length + ' desde la nube, ' + rec.toRemote.length + ' subidos');
         } catch (err) {
-          toast('No se pudo: ' + (err.message || err));
+          const msg = String(err.message || err);
+          if (/invalid login credentials/i.test(msg)) {
+            toast(mode === 'in' ? 'Ese correo no tiene cuenta todavía: pulsa «Crear cuenta»' : 'No se pudo crear: revisa correo y contraseña');
+          } else if (/already registered|user already/i.test(msg)) {
+            toast('Ese correo ya tiene cuenta: pulsa «Entrar»');
+          } else if (/email not confirmed/i.test(msg)) {
+            toast('Falta confirmar el correo: revisa tu bandeja o desactiva la confirmación en Supabase');
+          } else {
+            toast('No se pudo: ' + msg);
+          }
         }
       };
       card.appendChild(el('div', { class: 'row', style: { marginTop: '10px' } },
