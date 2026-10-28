@@ -618,3 +618,7 @@ details[open] > summary::before { content: "▾ "; }
 }
 .slot-head .c { text-align: center; }
 @media (max-width: 780px) { .slot-head { display: none; } }
+
+
+/* valores precargados de la sesión anterior: se ven distintos hasta que los tocas */
+.set-row input.prefilled { color: var(--muted); }

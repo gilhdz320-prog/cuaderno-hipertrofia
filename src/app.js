@@ -546,6 +546,17 @@
     return card;
   }
 
+  function quickReady(date, L) {
+    const r = { score: 80, light: 'green', quick: true, advice: 'Todo normal: entrena con el plan de hoy.' };
+    L.readiness = r;
+    /* respeta un ajuste por ciclo si ya lo había; si no, deja la sesión intacta */
+    const adj = CE.cycleAdjustment(null, L.cycle || {}, r);
+    L.modifier = adj.loadPct;
+    L.setDelta = adj.setDelta;
+    save(true); render();
+    toast('Sesión normal');
+  }
+
   function readinessCard(date, L) {
     const card = el('div', { class: 'card tight' });
     const r = L.readiness;
@@ -554,16 +565,19 @@
       const color = r.light === 'green' ? 'green' : r.light === 'amber' ? 'amber' : 'red';
       line.appendChild(el('div', { class: 'row' },
         el('span', { class: 'chip ' + color, text: 'Preparación ' + r.score + '/100' }),
-        el('span', { class: 'tiny muted', text: r.light === 'green' ? 'verde' : r.light === 'amber' ? 'ámbar' : 'rojo' })
+        r.quick ? el('span', { class: 'tiny muted', text: 'sin cuestionario' }) : null,
+        el('span', { class: 'tiny muted', text: r.advice || '' })
       ));
-      line.appendChild(el('button', { class: 'btn sm ghost', text: 'repetir', onclick: () => openReadiness(date, L) }));
+      line.appendChild(el('button', { class: 'btn sm ghost', text: 'cambiar', onclick: () => openReadiness(date, L) }));
       card.appendChild(line);
-      card.appendChild(el('p', { class: 'hint', style: { margin: '8px 0 0' }, text: r.advice }));
-    } else {
-      line.appendChild(el('span', { class: 'muted', html: '<b>¿Cómo llegas hoy?</b> El cuestionario ajusta la sesión: en déficit la preparación manda más que el plan escrito.' }));
-      line.appendChild(el('button', { class: 'btn sm', text: 'Responder', onclick: () => openReadiness(date, L) }));
-      card.appendChild(line);
+      return card;
     }
+    line.appendChild(el('span', { class: 'muted', html: '<b>¿Cómo llegas hoy?</b> Si todo va normal, un toque. El cuestionario largo solo cuando algo no cuadra.' }));
+    line.appendChild(el('div', { class: 'row tight' },
+      el('button', { class: 'btn sm primary', text: 'Todo normal', onclick: () => quickReady(date, L) }),
+      el('button', { class: 'btn sm ghost', text: 'Cuestionario', onclick: () => openReadiness(date, L) })
+    ));
+    card.appendChild(line);
     return card;
   }
 
@@ -638,6 +652,17 @@
     const entry = entryFor(date, slot.ex, isOptionalOff ? null : slot);
     const advised = CE.advise({ ex: slot.ex, reps: slot.reps, rir: slot.rir }, logsBefore(date), S.loads, EX);
     const last = CE.lastEntryFor(logsBefore(date), slot.ex);
+
+    /* lo que hiciste la última vez, para no teclear nada si repites */
+    const prevSets = last ? (last.entry.sets || []).filter(function (x) { return x && x.reps > 0; }) : [];
+    function prefillFor(i) {
+      const p = prevSets[i] || prevSets[prevSets.length - 1] || null;
+      return {
+        load: entry.load || S.loads[slot.ex] || 0,
+        reps: p ? p.reps : slot.reps[0],
+        rir: p && typeof p.rir === 'number' ? p.rir : slot.rir
+      };
+    }
     const card = el('article', { class: 'ex' });
 
     /* cabecera */
@@ -692,20 +717,26 @@
         'aria-label': 'kilos serie ' + (i + 1),
         oninput: (ev) => { st.load = num(ev.target.value); if (i === 0) entry.load = st.load; touch(date); }
       }));
-      row.appendChild(el('input', {
-        type: 'number', inputmode: 'numeric', step: '1', min: '0', value: st.reps != null ? st.reps : '', placeholder: slot.reps[0] + '–' + slot.reps[1],
+      const pf = prefillFor(i);
+      const repsInput = el('input', {
+        type: 'number', inputmode: 'numeric', step: '1', min: '0',
+        value: st.reps != null ? st.reps : pf.reps,
+        class: st.reps != null ? '' : 'prefilled',
         'aria-label': 'repeticiones serie ' + (i + 1),
-        oninput: (ev) => { st.reps = ev.target.value === '' ? undefined : num(ev.target.value); touch(date); }
-      }));
+        oninput: (ev) => { st.reps = ev.target.value === '' ? undefined : num(ev.target.value); ev.target.classList.remove('prefilled'); touch(date); }
+      });
+      row.appendChild(repsInput);
       row.appendChild(el('input', {
-        type: 'number', inputmode: 'decimal', step: '0.5', min: '0', max: '5', value: st.rir != null ? st.rir : '', placeholder: String(slot.rir),
+        type: 'number', inputmode: 'decimal', step: '0.5', min: '0', max: '5',
+        value: st.rir != null ? st.rir : pf.rir,
+        class: st.rir != null ? '' : 'prefilled',
         'aria-label': 'RIR serie ' + (i + 1),
-        oninput: (ev) => { st.rir = ev.target.value === '' ? undefined : num(ev.target.value); touch(date); }
+        oninput: (ev) => { st.rir = ev.target.value === '' ? undefined : num(ev.target.value); ev.target.classList.remove('prefilled'); touch(date); }
       }));
       row.appendChild(el('button', {
         class: 'check', 'aria-checked': st.done ? 'true' : 'false', title: 'Marcar serie',
         text: st.done ? '✓' : '',
-        onclick: () => toggleSet(date, day, slot, entry, i, st)
+        onclick: () => toggleSet(date, day, slot, entry, i, st, pf)
       }));
       sets.appendChild(row);
     }
@@ -775,11 +806,11 @@
 
   const touch = debounce((date) => { save(); }, 300);
 
-  function toggleSet(date, day, slot, entry, i, st) {
+  function toggleSet(date, day, slot, entry, i, st, pf) {
     if (!st.done) {
       if (st.load == null || st.load === 0) st.load = entry.load || S.loads[slot.ex] || 0;
-      if (st.reps == null || st.reps === 0) st.reps = slot.reps[0];
-      if (st.rir == null) st.rir = slot.rir;
+      if (st.reps == null || st.reps === 0) st.reps = (pf && pf.reps) || slot.reps[0];
+      if (st.rir == null) st.rir = pf && typeof pf.rir === 'number' ? pf.rir : slot.rir;
       st.done = true;
       startTimer(slot.rest || CE.exOf(slot.ex, EX).rest || 90, CE.exOf(slot.ex, EX).name);
     } else {

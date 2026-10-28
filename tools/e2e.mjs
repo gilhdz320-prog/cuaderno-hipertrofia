@@ -61,10 +61,13 @@ check('el alta guiada se puede saltar', !(await ev("!document.getElementById('mo
 
 check('arranca con la sesión de hoy', await ev("!!document.querySelector('#view h1')"), await ev("document.querySelector('#view h1') && document.querySelector('#view h1').textContent"));
 check('hay tarjetas de ejercicio', (await ev("document.querySelectorAll('.ex').length")) > 0, await ev("document.querySelectorAll('.ex').length"));
+const repsPrefill = await ev("document.querySelector('.ex .set-row input[inputmode=numeric]').value");
+check('la serie llega precargada con lo de la última vez', Number(repsPrefill) > 0, repsPrefill);
+
 check('la cabecera muestra la semana', /Semana/i.test(await ev("document.getElementById('weekChip').textContent")), await ev("document.getElementById('weekChip').textContent"));
 
 /* cuestionario de preparación */
-await ev("[...document.querySelectorAll('.card button')].find(b=>b.textContent==='Responder').click()");
+await ev("[...document.querySelectorAll('.card button')].find(b=>/Responder|Cuestionario/.test(b.textContent)).click()");
 await sleep(300);
 check('abre el cuestionario', await ev("!document.getElementById('modal').hidden"));
 await ev("document.querySelectorAll('.qi').forEach(q=>{ q.querySelectorAll('.scale button')[3].click(); }); 'ok'");
@@ -83,6 +86,9 @@ await ev("document.querySelector('.ex .set-row .check').click()");
 await sleep(500);
 check('marca la serie', await ev("document.querySelector('.ex .set-row .check').getAttribute('aria-checked')") === 'true');
 check('arranca el temporizador', await ev("!document.getElementById('timer').classList.contains('hidden')"), await ev("document.getElementById('timerTime').textContent"));
+const repsLogged = await ev("(function(){var S=Cuaderno.state();var d=Object.keys(S.logs).sort()[0];var L=S.logs[d];var k=Object.keys(L.entries)[0];return L.entries[k].sets[0].reps})()");
+check('el chequeo acepta lo precargado sin teclear', Number(repsLogged) > 0, repsLogged);
+
 check('la serie toma la carga base', (await ev("document.querySelector('.ex .set-row input').value")) === before, before);
 
 /* persistencia tras recargar */
@@ -147,13 +153,22 @@ await ev("(function(){var i=document.querySelector('.sheet input[type=text]'); i
 await sleep(600);
 check('crea y activa el perfil nuevo', (await ev("document.getElementById('profileName').textContent")) === 'Prueba', await ev("document.getElementById('profileName').textContent"));
 check('el perfil nuevo empieza sin registros', (await ev("Object.keys(Cuaderno.state().logs).length")) === 0);
+await ev("document.querySelector('[data-tab=hoy]').click()");
+await sleep(500);
+check('ofrece «todo normal»', (await ev("document.body.textContent.indexOf('Todo normal') >= 0")) === true);
+await ev("[...document.querySelectorAll('button')].find(function(b){return b.textContent==='Todo normal'}).click()");
+await sleep(500);
+const quick = await ev("(function(){var S=Cuaderno.state();var d=Object.keys(S.logs)[0];return S.logs[d] && S.logs[d].readiness ? S.logs[d].readiness.score : null})()");
+check('«todo normal» deja la sesión lista en un toque', quick === 80, quick);
+await ev("document.querySelector('[data-tab=ajustes]').click()");
+await sleep(400);
 check('el perfil nuevo tiene su propio programa', (await ev("Cuaderno.state().program.days.length")) >= 2, await ev("Cuaderno.state().program.days.length"));
 await ev("document.querySelector('[data-tab=ajustes]').click()");
 await sleep(400);
 check('ofrece traer el programa de otro perfil', (await ev("document.body.textContent.indexOf('Misma rutina que') >= 0")) === true);
 await ev("[...document.querySelectorAll('button')].find(function(b){return b.textContent==='Traer su programa'}).click()");
 await sleep(500);
-check('copia el programa sin tocar los registros', (await ev("(function(){var S=Cuaderno.state();var otros=Object.values(S.profiles||{});return S.program.days.length>0 && Object.keys(S.logs||{}).length===0})()")) === true);
+check('copia el programa sin tocar los registros', (await ev("(function(){var S=Cuaderno.state();var sinSeries=Object.keys(S.logs||{}).every(function(d){var e=S.logs[d].entries||{};return Object.keys(e).length===0});return S.program.days.length>0 && sinSeries})()")) === true);
 
 /* ---------- equipo: sin poleas ---------- */
 await ev("document.querySelector('[data-tab=ajustes]').click()");
