@@ -1247,8 +1247,14 @@
 
     S.program.days.forEach((day, di) => {
       const card = el('div', { class: 'card' });
+      const red = CE.sessionRedundancy(day, EX);
       const title = el('div', { class: 'card-title' },
         el('div', {}, el('h2', { text: day.name }), el('span', { class: 'meta', text: CE.weekdayName(day.weekday) + ' · ' + day.focus })),
+        red.length ? el('button', {
+          class: 'pill', style: { border: '1px solid var(--amber)', color: 'var(--amber)', background: 'transparent', cursor: 'pointer' },
+          text: '⚠ ' + red.length + ' estímulo duplicado', title: 'Dos ejercicios que trabajan el mismo músculo con el mismo patrón',
+          onclick: () => openRedundancy(day, red)
+        }) : null,
         el('div', { class: 'row tight' },
           el('span', { class: 'chip', text: CE.countSets({ days: [day] }) + ' series · ' + CE.sessionMinutes(day, EX) + '′' }),
           el('button', { class: 'btn sm ghost', text: '+ ejercicio', onclick: () => pickExercise(day) })
@@ -1346,6 +1352,7 @@
     }));
 
     const tools = el('div', { class: 'row tight', style: { gap: '2px' } });
+    tools.appendChild(el('button', { class: 'btn icon ghost', text: '⇄', title: 'cambiar por otro ejercicio', onclick: () => openSwap(day, slot, si) }));
     tools.appendChild(el('button', { class: 'btn icon ghost', text: '↑', title: 'subir', disabled: si === 0, onclick: () => { swapSlots(day, si, si - 1); } }));
     tools.appendChild(el('button', { class: 'btn icon ghost', text: '↓', title: 'bajar', disabled: si === day.slots.length - 1, onclick: () => { swapSlots(day, si, si + 1); } }));
     tools.appendChild(el('button', {
@@ -1367,6 +1374,56 @@
       ));
     }
     return row;
+  }
+
+  function openSwap(day, slot, si) {
+    const used = day.slots.map(function (s) { return s.ex; });
+    const opts = CE.swapOptions(slot.ex, { exMap: EX, equipment: S.equipment, prefs: S.prefs, exclude: used, limit: 8 });
+    const body = el('div', { class: 'stack' });
+    body.appendChild(el('p', { class: 'hint', text: 'Alternativas que trabajan lo mismo con tu material. Cuanto más arriba, más parecido al original.' }));
+    if (!opts.length) body.appendChild(el('div', { class: 'empty', text: 'No hay alternativas disponibles con tu material actual.' }));
+    opts.forEach(function (o) {
+      body.appendChild(el('div', { class: 'row between', style: { padding: '8px 0', borderBottom: '1px solid var(--line)' } },
+        el('div', {}, el('b', { text: o.name }), el('div', { class: 'tiny muted', text: o.why.join(' · ') })),
+        el('button', {
+          class: 'btn sm', text: 'usar',
+          onclick: () => {
+            slot.ex = o.id;
+            if (!S.loads[o.id]) S.loads[o.id] = CE.seedLoads(S)[o.id];
+            save(true); closeSheet(); render();
+            toast('Cambiado por «' + o.name + '»');
+          }
+        })
+      ));
+    });
+    body.appendChild(el('div', { class: 'row', style: { marginTop: '10px' } },
+      el('button', {
+        class: 'btn sm ghost', text: 'quitar este ejercicio',
+        onclick: () => { day.slots.splice(si, 1); save(true); closeSheet(); render(); toast('Ejercicio quitado'); }
+      })
+    ));
+    openSheet('Cambiar «' + CE.exOf(slot.ex, EX).name + '»', 'Elige entre las opciones o quítalo', body, [{ label: 'Cerrar', ghost: true, onClick: closeSheet }]);
+  }
+
+  function openRedundancy(day, red) {
+    const body = el('div', { class: 'stack' });
+    body.appendChild(el('p', { class: 'hint', text: 'Dos ejercicios con el mismo patrón suman series al mismo músculo, no estímulo nuevo. En déficit, eso es presupuesto de recuperación gastado dos veces. Cambia uno o quítalo.' }));
+    red.forEach(function (g) {
+      body.appendChild(el('div', { class: 'card tight', style: { background: 'transparent' } },
+        el('b', { text: g.label }),
+        el('div', { class: 'tiny muted', text: g.items.map(function (i) { return i.name; }).join(' + ') }),
+        el('div', { class: 'row tight', style: { marginTop: '8px' } },
+          g.items.slice(1).map(function (it) {
+            var si = day.slots.findIndex(function (s) { return s.ex === it.ex; });
+            return el('button', {
+              class: 'btn sm ghost', text: 'cambiar ' + it.name,
+              onclick: () => { closeSheet(); openSwap(day, day.slots[si], si); }
+            });
+          })
+        )
+      ));
+    });
+    openSheet('Estímulo duplicado', null, body, [{ label: 'Cerrar', ghost: true, onClick: closeSheet }]);
   }
 
   function swapSlots(day, a, b) {
@@ -1824,6 +1881,10 @@
     vt.appendChild(vtb);
     doc.appendChild(docTable(vt));
     doc.appendChild(el('p', { text: 'Series efectivas = directas (1) más indirectas (0,5). El total semanal ronda las ' + CE.countSets(P) + ' series duras: es volumen medio, deliberadamente. La excepción es el glúteo, que va al extremo alto porque es la prioridad declarada, y el cuádriceps y el pecho, que quedan en el extremo bajo a propósito: en un déficit con ' + CE.countSets(P) + ' series no se puede tener todo en el techo.' }));
+
+    doc.appendChild(el('h2', { text: 'Por qué no repetimos el mismo patrón' }));
+    doc.appendChild(el('p', { text: 'Dos presses en la misma sesión —banca e inclinado— trabajan el mismo músculo con el mismo patrón. No suman estímulo nuevo: suman series al mismo presupuesto semanal de pecho, y llegan cuando ya hay fatiga acumulada. La evidencia sobre dosis (Schoenfeld, Ogborn y Krieger, 2017; Baz-Valle y colaboradores, 2022) es clara en que el volumen cuenta por músculo, y los modelos dosis-respuesta más recientes (Pelland y colaboradores, 2024, preprint) muestran rendimientos decrecientes: cada serie extra aporta menos que la anterior.' }));
+    doc.appendChild(el('p', { text: 'Eso no significa que la variación no sirva. Cambiar el ángulo o el ejercicio tiene sentido para énfasis regional y para repartir fatiga (Kassiano y colaboradores, 2023), y el orden importa: lo que haces al final se lleva menos repeticiones a la misma carga. Por eso el programa pone un press por sesión, la variación entre días, y avisa cuando dos ejercicios comparten músculo y patrón.' }));
 
     doc.appendChild(el('h2', { text: 'Cómo se progresa' }));
     doc.appendChild(el('p', { text: 'Doble progresión, sin porcentajes mágicos. La carga se mantiene hasta que todas las series del ejercicio tocan el techo del rango con el RIR objetivo; ahí se sube un escalón pequeño (2,5 % en tren superior, 5 % en tren inferior). Si una serie queda por debajo del mínimo del rango, o la primera llega a RIR 0, se baja un 5 % y se sigue. Si falta el dato de reps y RIR, la semana siguiente repite la carga en lugar de inventar progresión.' }));

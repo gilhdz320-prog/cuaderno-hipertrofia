@@ -114,6 +114,15 @@ check('editor con filas', await ev("document.querySelectorAll('.slot-edit').leng
 const exId = await ev("document.querySelector('.slot-edit select').value");
 const cargaOk = await ev("(function(){var row=document.querySelector('.slot-edit'); var ins=row.querySelectorAll('input'); var last=ins[ins.length-1]; last.value='99'; last.dispatchEvent(new Event('change')); return 1})()");
 await sleep(500);
+await ev("(function(){var b=document.querySelector('.slot-edit .btn.icon.ghost'); b.click(); return 1})()");
+await sleep(400);
+check('abre el cambio de ejercicio con varias opciones', (await ev("document.body.textContent.indexOf('Alternativas que trabajan lo mismo') >= 0")) === true, await ev("document.querySelectorAll('.sheet .btn.sm').length"));
+const antesEx = await ev("document.querySelector('.slot-edit select').value");
+await ev("[...document.querySelectorAll('.sheet .btn.sm')].find(function(b){return b.textContent==='usar'}).click()");
+await sleep(600);
+check('el ejercicio se sustituye', (await ev("document.querySelector('.slot-edit select').value")) !== antesEx, antesEx + ' → ' + await ev("document.querySelector('.slot-edit select').value"));
+check('avisa de estímulo duplicado', (await ev("document.body.textContent.indexOf('estímulo duplicado') >= 0")) === true);
+
 check('la carga se edita desde Programa', String(await ev("Cuaderno.state().loads[" + JSON.stringify(exId) + "]")) === '99', exId + ' = ' + await ev("Cuaderno.state().loads[" + JSON.stringify(exId) + "]"));
 const setsBefore = await ev("document.querySelector('.slot-edit .stepper .val').textContent");
 await ev("document.querySelector('.slot-edit .stepper button:last-child').click()");

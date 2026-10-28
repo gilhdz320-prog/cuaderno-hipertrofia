@@ -138,6 +138,9 @@
 
     curl_band:       { name: 'Curl con banda',                 pattern: 'biceps',     equipment: 'accesorio',     primary: 'biceps',     secondary: [],                     incPct: 2.5, axial: 0, unilateral: false, rest: 60,  bwFactor: 0.00, step: 1,   cue: 'Pisa la banda; sube controlando la bajada.' },
 
+    pec_deck_inv:    { name: 'Pec deck invertido',             pattern: 'rear_delt',  equipment: 'máquina',       primary: 'delt_rear',  secondary: ['back'],               incPct: 2.5, axial: 0, unilateral: false, rest: 60,  bwFactor: 0.10, step: 2.5, cue: 'Pecho apoyado, codos a la altura de los hombros.' },
+    rear_delt_cable: { name: 'Posterior en polea cruzada',     pattern: 'rear_delt',  equipment: 'polea',         primary: 'delt_rear',  secondary: ['back'],               incPct: 2.5, axial: 0, unilateral: true,  rest: 60,  bwFactor: 0.06, step: 1.25, cue: 'El cable cruza por delante; abre sin encoger el cuello.' },
+
     /* --- core --- */
     ab_wheel:        { name: 'Rueda abdominal',           pattern: 'core',       equipment: 'accesorio', primary: 'core',     secondary: [],                     incPct: 5,    axial: 0, unilateral: false, rest: 60,  bwFactor: 0.00, step: 2.5, cue: 'Costillas cerradas; no dejes caer la lumbar.' },
     plank:           { name: 'Plancha',                   pattern: 'core',       equipment: 'peso corporal', primary: 'core', secondary: [],                    incPct: 5,    axial: 0, unilateral: false, rest: 60,  bwFactor: 0.00, step: 2.5, cue: 'Series por tiempo, no por repeticiones.' }
@@ -248,6 +251,60 @@
       .filter((c) => c.score >= 4)
       .sort((a, b) => (b.score - a.score) || a.id.localeCompare(b.id));
     return scored.length ? scored[0].id : null;
+  }
+
+  /* Alternativas para un ejercicio, ordenadas y explicadas. Se usa en el
+     editor: el usuario elige entre varias, no una sola impuesta. */
+  function swapOptions(exId, opts) {
+    opts = opts || {};
+    const exMap = opts.exMap || getExMap();
+    const prefs = opts.prefs || {};
+    const exclude = opts.exclude || [];
+    const src = exOf(exId, exMap);
+    const srcCompound = COMPOUND_PATTERNS.indexOf(src.pattern) >= 0;
+    return Object.keys(exMap)
+      .filter((id) => id !== exId && exclude.indexOf(id) < 0)
+      .filter((id) => prefs[id] !== 'dislike')
+      .filter((id) => isAvailable(exMap[id], opts.equipment))
+      .map((id) => {
+        const e = exMap[id];
+        let score = 0;
+        const why = [];
+        if (e.primary === src.primary) { score += 5; why.push('mismo músculo'); }
+        if (e.pattern === src.pattern) { score += 3; why.push('mismo patrón'); }
+        if ((e.secondary || []).indexOf(src.primary) >= 0) { score += 1; }
+        if ((COMPOUND_PATTERNS.indexOf(e.pattern) >= 0) === srcCompound) { score += 1; why.push(srcCompound ? 'también compuesto' : 'también aislamiento'); }
+        if (prefs[id] === 'like') { score += 2; why.push('te gusta'); }
+        if (e.primary !== src.primary) score -= 3;
+        return { id: id, name: e.name, score: score, why: why, primary: e.primary };
+      })
+      .filter((o) => o.score >= 4)
+      .sort((a, b) => (b.score - a.score) || a.name.localeCompare(b.name, 'es'))
+      .slice(0, opts.limit || 6);
+  }
+
+  /* Dos compuestos del mismo músculo en la misma sesión: suman series al
+     mismo presupuesto, no estímulo nuevo. Se avisa, no se prohíbe. */
+  /* Familia de movimiento: dos variantes de press cuentan como lo mismo;
+     un jalón y un remo, no. */
+  function movementFamily(e) {
+    if (e.pattern === 'push_h' || e.pattern === 'push_i') return 'press';
+    return e.pattern;
+  }
+
+  function sessionRedundancy(day, exMap) {
+    const groups = {};
+    day.slots.forEach((slot) => {
+      if (slot.optional) return;
+      const e = exOf(slot.ex, exMap);
+      if (COMPOUND_PATTERNS.indexOf(e.pattern) < 0) return;
+      const fam = e.primary + '|' + movementFamily(e);
+      groups[fam] = groups[fam] || { muscle: e.primary, items: [] };
+      groups[fam].items.push({ ex: slot.ex, name: e.name });
+    });
+    return Object.keys(groups)
+      .filter((k) => groups[k].items.length > 1)
+      .map((k) => ({ muscle: groups[k].muscle, label: MUSCLE_LABEL[groups[k].muscle] || groups[k].muscle, items: groups[k].items }));
   }
 
   /* Aplica las restricciones del perfil (equipo y gustos) a un programa.
@@ -1428,6 +1485,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     round1: round1, roundTo: roundTo, selfTest: selfTest,
     REPS_BAND: REPS_BAND, repsBandFor: repsBandFor, clampRepsFor: clampRepsFor, EXPERIENCE_FACTOR: EXPERIENCE_FACTOR,
     e1rm: e1rm, exerciseHistory: exerciseHistory, stagnation: stagnation,
+    swapOptions: swapOptions, sessionRedundancy: sessionRedundancy, movementFamily: movementFamily,
     cycleInfo: cycleInfo, cycleAdjustment: cycleAdjustment, cyclePattern: cyclePattern, CYCLE_PHASE_LABEL: CYCLE_PHASE_LABEL, daysBetween: daysBetween,
     CARDIO_PROTOCOLS: CARDIO_PROTOCOLS, lowerDays: lowerDays, suggestCardioDay: suggestCardioDay, cardioWarnings: cardioWarnings, dayDistance: dayDistance,
     EQUIPMENT: EQUIPMENT, requiredEquipment: requiredEquipment, isAvailable: isAvailable,
