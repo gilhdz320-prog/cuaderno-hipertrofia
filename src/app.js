@@ -2403,7 +2403,7 @@
         el('button', {
           class: 'btn sm primary', text: 'Guardar configuración',
           onclick: () => {
-            const u = url.value.trim(), k = key.value.trim();
+            const u = window.CuadernoSync.normalizeUrl(url.value), k = key.value.trim();
             if (!u || !k) { toast('Faltan la URL o la clave'); return; }
             saveSyncCfg(u, k);
             initSync(); render();
@@ -2444,6 +2444,17 @@
         el('button', { class: 'btn sm', text: 'Crear cuenta', onclick: () => run('up') })
       ));
       card.appendChild(el('div', { class: 'row', style: { marginTop: '8px' } },
+        el('button', {
+          class: 'btn sm', text: 'Probar conexión',
+          onclick: async () => {
+            try {
+              const h = await SYNC_CLIENT.health();
+              toast(h.ok ? 'Dominio correcto: ' + h.url : 'Responde ' + h.status + ': revisa la URL');
+            } catch (e) {
+              toast('No responde: ' + (e.message || e) + '. Copia la URL desde Supabase → Overview → Copy');
+            }
+          }
+        }),
         el('button', { class: 'btn sm ghost', text: 'Cambiar proyecto', onclick: () => { saveSyncCfg('', ''); initSync(); render(); } })
       ));
       return card;

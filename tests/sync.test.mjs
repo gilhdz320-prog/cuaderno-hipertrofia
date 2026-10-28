@@ -100,3 +100,16 @@ test('reconcile: local más nuevo no se pisa', () => {
   assert.equal(r.toLocal.length, 0);
   assert.equal(r.toRemote.length, 0);
 });
+
+test('normalizeUrl arregla lo que se pega mal', () => {
+  assert.equal(SYNC.normalizeUrl('abc.supabase.co'), 'https://abc.supabase.co');
+  assert.equal(SYNC.normalizeUrl('https://abc.supabase.co/'), 'https://abc.supabase.co');
+  assert.equal(SYNC.normalizeUrl('  https://abc.supabase.co// '), 'https://abc.supabase.co');
+  assert.equal(SYNC.normalizeUrl(''), '');
+});
+
+test('health falla claro si el dominio no responde', async () => {
+  const f = async () => { throw new TypeError('Failed to fetch'); };
+  const s = SYNC.createSync({ url: 'malo.supabase.co', anonKey: 'k', fetch: f, storage: memStorage() });
+  await assert.rejects(() => s.health(), /Failed to fetch/);
+});

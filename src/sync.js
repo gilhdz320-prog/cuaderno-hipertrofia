@@ -16,17 +16,33 @@
 
   function nowSec() { return Math.floor(Date.now() / 1000); }
 
+  /* Acepta "xxx.supabase.co", "https://xxx.supabase.co/" o con espacios:
+     deja siempre https:// + host, sin barra final. */
+  function normalizeUrl(raw) {
+    let u = String(raw || '').trim().replace(/\s+/g, '');
+    if (!u) return '';
+    if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+    u = u.replace(/\/+$/, '');
+    return u;
+  }
+
   /* Crea un cliente. opts: { url, anonKey, fetch, storage }
      storage: { get(k), set(k,v), remove(k) } — normalmente localStorage. */
   function createSync(opts) {
     opts = opts || {};
-    const base = String(opts.url || '').replace(/\/+$/, '');
+    const base = normalizeUrl(opts.url);
     const anonKey = opts.anonKey || '';
     const doFetch = opts.fetch || (typeof fetch !== 'undefined' ? fetch.bind(globalThis) : null);
     const storage = opts.storage || null;
     let session = null;
 
     function configured() { return !!(base && anonKey && doFetch); }
+
+    async function health() {
+      if (!configured()) throw new Error('Falta la URL del proyecto');
+      const res = await doFetch(base + '/auth/v1/health', { method: 'GET', headers: { apikey: anonKey } });
+      return { ok: res.ok, status: res.status, url: base };
+    }
 
     function loadSession() {
       if (session) return session;
@@ -169,7 +185,7 @@
     }
 
     return {
-      configured: configured,
+      configured: configured, health: health, url: base,
       signUp: signUp, signIn: signIn, signOut: signOut, refresh: refresh,
       currentSession: currentSession, pull: pull, push: push, remove: remove,
       session: function () { return loadSession(); },
@@ -205,5 +221,5 @@
     return { toLocal: toLocal, toRemote: toRemote };
   }
 
-  return { createSync: createSync, reconcile: reconcile, SESSION_KEY: SESSION_KEY };
+  return { createSync: createSync, reconcile: reconcile, normalizeUrl: normalizeUrl, SESSION_KEY: SESSION_KEY };
 });

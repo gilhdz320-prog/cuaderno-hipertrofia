@@ -2110,17 +2110,33 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
 
   function nowSec() { return Math.floor(Date.now() / 1000); }
 
+  /* Acepta "xxx.supabase.co", "https://xxx.supabase.co/" o con espacios:
+     deja siempre https:// + host, sin barra final. */
+  function normalizeUrl(raw) {
+    let u = String(raw || '').trim().replace(/\s+/g, '');
+    if (!u) return '';
+    if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+    u = u.replace(/\/+$/, '');
+    return u;
+  }
+
   /* Crea un cliente. opts: { url, anonKey, fetch, storage }
      storage: { get(k), set(k,v), remove(k) } — normalmente localStorage. */
   function createSync(opts) {
     opts = opts || {};
-    const base = String(opts.url || '').replace(/\/+$/, '');
+    const base = normalizeUrl(opts.url);
     const anonKey = opts.anonKey || '';
     const doFetch = opts.fetch || (typeof fetch !== 'undefined' ? fetch.bind(globalThis) : null);
     const storage = opts.storage || null;
     let session = null;
 
     function configured() { return !!(base && anonKey && doFetch); }
+
+    async function health() {
+      if (!configured()) throw new Error('Falta la URL del proyecto');
+      const res = await doFetch(base + '/auth/v1/health', { method: 'GET', headers: { apikey: anonKey } });
+      return { ok: res.ok, status: res.status, url: base };
+    }
 
     function loadSession() {
       if (session) return session;
@@ -2263,7 +2279,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     }
 
     return {
-      configured: configured,
+      configured: configured, health: health, url: base,
       signUp: signUp, signIn: signIn, signOut: signOut, refresh: refresh,
       currentSession: currentSession, pull: pull, push: push, remove: remove,
       session: function () { return loadSession(); },
@@ -2299,7 +2315,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     return { toLocal: toLocal, toRemote: toRemote };
   }
 
-  return { createSync: createSync, reconcile: reconcile, SESSION_KEY: SESSION_KEY };
+  return { createSync: createSync, reconcile: reconcile, normalizeUrl: normalizeUrl, SESSION_KEY: SESSION_KEY };
 });
 
 </script>
@@ -4709,7 +4725,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
         el('button', {
           class: 'btn sm primary', text: 'Guardar configuración',
           onclick: () => {
-            const u = url.value.trim(), k = key.value.trim();
+            const u = window.CuadernoSync.normalizeUrl(url.value), k = key.value.trim();
             if (!u || !k) { toast('Faltan la URL o la clave'); return; }
             saveSyncCfg(u, k);
             initSync(); render();
@@ -4750,6 +4766,17 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
         el('button', { class: 'btn sm', text: 'Crear cuenta', onclick: () => run('up') })
       ));
       card.appendChild(el('div', { class: 'row', style: { marginTop: '8px' } },
+        el('button', {
+          class: 'btn sm', text: 'Probar conexión',
+          onclick: async () => {
+            try {
+              const h = await SYNC_CLIENT.health();
+              toast(h.ok ? 'Dominio correcto: ' + h.url : 'Responde ' + h.status + ': revisa la URL');
+            } catch (e) {
+              toast('No responde: ' + (e.message || e) + '. Copia la URL desde Supabase → Overview → Copy');
+            }
+          }
+        }),
         el('button', { class: 'btn sm ghost', text: 'Cambiar proyecto', onclick: () => { saveSyncCfg('', ''); initSync(); render(); } })
       ));
       return card;
