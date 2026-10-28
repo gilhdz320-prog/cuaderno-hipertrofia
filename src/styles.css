@@ -659,3 +659,5 @@ body.train-mode .plates { padding: 6px 14px; font-size: .7rem; }
 .vol-chip.low i { color: var(--amber); }
 .vol-chip.high { border-color: color-mix(in srgb, var(--red) 55%, var(--line)); }
 .vol-chip.high i { color: var(--red); }
+
+.vol-chip b small { font-size: .6rem; color: var(--muted); font-weight: 500; }

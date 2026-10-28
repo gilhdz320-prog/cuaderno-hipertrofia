@@ -1652,15 +1652,19 @@
     const wrap2 = el('div', { class: 'vol-chips' });
     rows.forEach(function (r) {
       const low = r.status === 'low', high = r.status === 'high';
-      const falta = low ? Math.round((r.range[0] - r.total) * 10) / 10 : 0;
-      const sobra = high ? Math.round((r.total - r.range[1]) * 10) / 10 : 0;
+      const falta = Math.round((r.range[0] - r.total) * 10) / 10;
+      const sobra = Math.round((r.total - r.range[1]) * 10) / 10;
+      const margen = Math.round((r.range[1] - r.total) * 10) / 10;
+      const nota = low ? 'faltan ' + falta
+        : high ? 'sobran ' + sobra
+        : (margen <= 0.5 ? 'en el tope' : 'puedes subir ' + margen);
       wrap2.appendChild(el('div', {
         class: 'vol-chip ' + (low ? 'low' : high ? 'high' : 'ok'),
-        title: r.label + ': ' + r.total + ' series (rango ' + r.range[0] + '–' + r.range[1] + ')'
+        title: r.label + ': ' + r.total + ' series · rango ' + r.range[0] + '–' + r.range[1] + ' · ' + nota
       },
         el('span', { class: 'n', text: r.short }),
-        el('b', { text: r.total }),
-        low ? el('i', { text: 'faltan ' + falta }) : high ? el('i', { text: 'sobran ' + sobra }) : el('i', { text: 'ok' })
+        el('b', {}, String(r.total), el('small', { text: ' / ' + r.range[0] + '–' + r.range[1] })),
+        el('i', { text: nota })
       ));
     });
     card.appendChild(wrap2);
