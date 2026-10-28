@@ -141,6 +141,9 @@
     pec_deck_inv:    { name: 'Pec deck invertido',             pattern: 'rear_delt',  equipment: 'máquina',       primary: 'delt_rear',  secondary: ['back'],               incPct: 2.5, axial: 0, unilateral: false, rest: 60,  bwFactor: 0.10, step: 2.5, cue: 'Pecho apoyado, codos a la altura de los hombros.' },
     rear_delt_cable: { name: 'Posterior en polea cruzada',     pattern: 'rear_delt',  equipment: 'polea',         primary: 'delt_rear',  secondary: ['back'],               incPct: 2.5, axial: 0, unilateral: true,  rest: 60,  bwFactor: 0.06, step: 1.25, cue: 'El cable cruza por delante; abre sin encoger el cuello.' },
 
+    cable_fly:       { name: 'Aperturas en polea',             pattern: 'fly',        equipment: 'polea',         primary: 'chest',      secondary: ['delt_front'],         incPct: 2.5, axial: 0, unilateral: false, rest: 75,  bwFactor: 0.12, step: 2.5, cue: 'Codos algo flexionados; junta sin choque, controla la vuelta.' },
+    pec_deck:        { name: 'Pec deck (aperturas en máquina)', pattern: 'fly',       equipment: 'máquina',       primary: 'chest',      secondary: ['delt_front'],         incPct: 2.5, axial: 0, unilateral: false, rest: 75,  bwFactor: 0.25, step: 2.5, cue: 'Pecho apoyado; abre hasta sentir el estiramiento.' },
+
     /* --- core --- */
     ab_wheel:        { name: 'Rueda abdominal',           pattern: 'core',       equipment: 'accesorio', primary: 'core',     secondary: [],                     incPct: 5,    axial: 0, unilateral: false, rest: 60,  bwFactor: 0.00, step: 2.5, cue: 'Costillas cerradas; no dejes caer la lumbar.' },
     plank:           { name: 'Plancha',                   pattern: 'core',       equipment: 'peso corporal', primary: 'core', secondary: [],                    incPct: 5,    axial: 0, unilateral: false, rest: 60,  bwFactor: 0.00, step: 2.5, cue: 'Series por tiempo, no por repeticiones.' }
@@ -196,7 +199,7 @@
     push_h: [6, 10], push_i: [8, 12], push_v: [6, 10],
     pull_v: [6, 10], pull_h: [6, 10], pull_uni: [8, 12],
     knee_ext: [10, 15], knee_flex: [10, 15],
-    lateral: [12, 20], rear_delt: [12, 20],
+    lateral: [12, 20], rear_delt: [12, 20], fly: [10, 15],
     biceps: [8, 15], triceps: [8, 15],
     calf: [10, 20], abduction: [12, 20], kickback: [12, 20], core: [8, 15]
   };
@@ -405,10 +408,10 @@
       ]},
       { id: 'upper_a', kind: 'upper_a', weekday: 2, name: 'Tren superior A', focus: 'Empuje', slots: [
         slot('bench', 3, [6, 8], 2, { rest: 180 }),
-        slot('incline_db', 3, [8, 10], 2, { rest: 120 }),
+        slot('cable_fly', 3, [10, 15], 1, { rest: 75 }),
         slot('ohp', 2, [8, 10], 2, { rest: 150 }),
-        slot('lateral_raise', 4, [12, 15], 1, { rest: 60 }),
-        slot('triceps_pushdown', 3, [10, 12], 1, { rest: 60 }),
+        slot('lateral_raise', 3, [12, 15], 1, { rest: 60 }),
+        slot('triceps_pushdown', 4, [10, 12], 1, { rest: 60 }),
         slot('face_pull', 2, [15, 20], 1, { rest: 60 })
       ]},
       { id: 'lower_b', kind: 'lower_b', weekday: 4, name: 'Tren inferior B', focus: 'Glúteo unilateral y cuádriceps', slots: [
@@ -1124,6 +1127,28 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     return { samples: n, weakest: weakest.slice(0, 3) };
   }
 
+  /* Proyección de carga semana a semana: sube un escalón cada dos semanas
+     si se cumple el rango, y se queda igual en las descargas. Es una
+     previsión para tener control, no una orden: el registro manda. */
+  function projectBlock(load, ex, opts) {
+    opts = opts || {};
+    const weeks = opts.weeks || 12;
+    const deloads = opts.deloads || [6, 12];
+    const step = (ex && ex.step) || 2.5;
+    const inc = (ex && ex.incPct) || 2.5;
+    let cur = Number(load) || 0;
+    const out = [];
+    for (let w = 1; w <= weeks; w++) {
+      const deload = deloads.indexOf(w) >= 0;
+      if (w > 1 && !deload && w % 2 === 0 && cur > 0) {
+        const up = roundTo(cur * (1 + inc / 100), step);
+        cur = Math.max(up, cur + step);
+      }
+      out.push({ week: w, load: Math.round(cur * 100) / 100, deload: deload });
+    }
+    return out;
+  }
+
   /* ------------------------------------------------------------------ *
    * 8.d Historial por ejercicio y detección de estancamiento
    * ------------------------------------------------------------------ */
@@ -1407,8 +1432,9 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     ok('4 días: glúteo 14,5', near(v4.glute.total, 14.5), v4.glute.total);
     ok('4 días: isquios 11,5', near(v4.ham.total, 11.5), v4.ham.total);
     ok('4 días: espalda 11,5', near(v4.back.total, 11.5), v4.back.total);
-    ok('4 días: deltoides 16', near(v4.delt_front.total + v4.delt_side.total + v4.delt_rear.total, 16), v4.delt_front.total + v4.delt_side.total + v4.delt_rear.total);
+    ok('4 días: deltoides 15', near(v4.delt_front.total + v4.delt_side.total + v4.delt_rear.total, 15), v4.delt_front.total + v4.delt_side.total + v4.delt_rear.total);
     ok('4 días: pecho 6', near(v4.chest.total, 6), v4.chest.total);
+    ok('4 días: tríceps 6,5', near(v4.triceps.total, 6.5), v4.triceps.total);
     ok('4 días: pantorrilla 6', near(v4.calf.total, 6), v4.calf.total);
     ok('4 días: 4 sesiones', p4.days.length === 4, p4.days.length);
 
@@ -1484,7 +1510,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     defaultState: defaultState, seedLoads: seedLoads, normalizeState: normalizeState,
     round1: round1, roundTo: roundTo, selfTest: selfTest,
     REPS_BAND: REPS_BAND, repsBandFor: repsBandFor, clampRepsFor: clampRepsFor, EXPERIENCE_FACTOR: EXPERIENCE_FACTOR,
-    e1rm: e1rm, exerciseHistory: exerciseHistory, stagnation: stagnation,
+    e1rm: e1rm, exerciseHistory: exerciseHistory, stagnation: stagnation, projectBlock: projectBlock,
     swapOptions: swapOptions, sessionRedundancy: sessionRedundancy, movementFamily: movementFamily,
     cycleInfo: cycleInfo, cycleAdjustment: cycleAdjustment, cyclePattern: cyclePattern, CYCLE_PHASE_LABEL: CYCLE_PHASE_LABEL, daysBetween: daysBetween,
     CARDIO_PROTOCOLS: CARDIO_PROTOCOLS, lowerDays: lowerDays, suggestCardioDay: suggestCardioDay, cardioWarnings: cardioWarnings, dayDistance: dayDistance,

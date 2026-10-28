@@ -19,9 +19,9 @@ test('el programa de 4 días reproduce el documento', () => {
   assert.ok(near(v.calf.total, 6), 'pantorrilla ' + v.calf.total);
   assert.ok(near(v.quad.total, 9.5), 'cuádriceps ' + v.quad.total);
   assert.ok(near(v.biceps.total, 7), 'bíceps ' + v.biceps.total);
-  assert.ok(near(v.triceps.total, 7), 'tríceps ' + v.triceps.total);
+  assert.ok(near(v.triceps.total, 6.5), 'tríceps ' + v.triceps.total);
   const delts = v.delt_front.total + v.delt_side.total + v.delt_rear.total;
-  assert.ok(near(delts, 16), 'deltoides ' + delts);
+  assert.ok(near(delts, 15), 'deltoides ' + delts);
   // técnica del documento: hip thrust primero y 4 series
   assert.equal(p.days[0].slots[0].ex, 'hip_thrust');
   assert.equal(p.days[0].slots[0].sets, 4);
@@ -320,4 +320,16 @@ test('el alta guiada no se repite a quien ya tenía datos', () => {
   assert.equal(p.onboarded, false, 'perfil nuevo: pasa por el alta');
   const conDatos = CE.migrateState({ version: 3, activeId: p.id, profiles: { [p.id]: Object.assign({}, p, { onboarded: undefined, logs: { '2026-10-01': { entries: {} } } }) } });
   assert.equal(Object.values(conDatos.profiles)[0].onboarded, true, 'perfil con datos: sin alta');
+});
+
+test('proyección de carga: sube y respeta las descargas', () => {
+  const ex = CE.getExMap([]).bench;
+  const p = CE.projectBlock(60, ex, { weeks: 12 });
+  assert.equal(p.length, 12);
+  assert.equal(p[0].load, 60, 'empieza en la carga actual');
+  assert.ok(p[11].load > p[0].load, 'termina más alto');
+  assert.equal(p[5].deload, true, 'semana 6 descarga');
+  assert.equal(p[11].deload, true, 'semana 12 descarga');
+  assert.equal(p[5].load, p[4].load, 'la descarga no sube carga');
+  for (let i = 1; i < p.length; i++) assert.ok(p[i].load >= p[i - 1].load, 'nunca baja');
 });

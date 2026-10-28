@@ -1578,6 +1578,8 @@
     wrap.appendChild(historyCard());
     wrap.appendChild(stallCard());
 
+    wrap.appendChild(projectionCard());
+
     /* progresión por ejercicio */
     const loadCard = el('div', { class: 'card' });
     loadCard.appendChild(el('div', { class: 'card-title' }, el('h2', { text: 'Carga y próxima subida' }), el('span', { class: 'meta', text: 'doble progresión' })));
@@ -1719,6 +1721,45 @@
         })
       ));
     }
+    return card;
+  }
+
+  function projectionCard() {
+    const seen = {};
+    const rows = [];
+    S.program.days.forEach(function (d) { d.slots.forEach(function (sl) { if (!seen[sl.ex]) { seen[sl.ex] = 1; rows.push(sl.ex); } }); });
+    const card = el('div', { class: 'card' });
+    const cw = Math.max(1, Math.min(S.block.weeks || 12, CE.weekNumber(S.block.start, todayISO())));
+    card.appendChild(el('div', { class: 'card-title' },
+      el('h2', { text: 'Progresión prevista' }),
+      el('span', { class: 'meta', text: 'semana ' + cw + ' de ' + (S.block.weeks || 12) })
+    ));
+    card.appendChild(el('p', { class: 'hint', text: 'Qué peso tocaría cada semana si cumples el rango con el RIR objetivo. Sube un escalón cada dos semanas; las semanas 6 y 12 son descarga y mantienen la carga. Se recalcula con tus cargas actuales.' }));
+
+    const tbl = el('table', { class: 'tbl' });
+    const thead = el('tr', {}, el('th', { text: 'Ejercicio' }));
+    for (let w = 1; w <= (S.block.weeks || 12); w++) {
+      thead.appendChild(el('th', { class: 'c' + (w === cw ? ' is-today' : ''), text: 'S' + w }));
+    }
+    tbl.appendChild(el('thead', {}, thead));
+    const tb = el('tbody');
+    rows.forEach(function (exId) {
+      const e = CE.exOf(exId, EX);
+      const proj = CE.projectBlock(S.loads[exId] || 0, e, { weeks: S.block.weeks || 12 });
+      const tr = el('tr');
+      tr.appendChild(el('td', { text: e.name }));
+      proj.forEach(function (p) {
+        tr.appendChild(el('td', {
+          class: 'c' + (p.deload ? ' muted' : '') + (p.week === cw ? ' is-today' : ''),
+          style: p.deload ? { opacity: '.65' } : null,
+          text: p.load ? kg(p.load) : '—'
+        }));
+      });
+      tb.appendChild(tr);
+    });
+    tbl.appendChild(tb);
+    card.appendChild(el('div', { class: 'scroll-x' }, tbl));
+    card.appendChild(el('p', { class: 'tiny muted', style: { marginTop: '8px' }, text: 'S6 y S12 en gris: descarga, misma carga y volumen a la mitad. La proyección asume que completas el rango; si no, la carga se queda donde estás.' }));
     return card;
   }
 
