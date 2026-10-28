@@ -214,6 +214,11 @@ check('activa el ciclo y guarda la fecha', (await ev("Cuaderno.state().cycle.ena
 
 await ev("document.querySelector('[data-tab=hoy]').click()");
 await sleep(600);
+check('hay botón para marcar el inicio del sangrado', (await ev("document.querySelector('#view').textContent.indexOf('Me está bajando') >= 0")) === true);
+await ev("[...document.querySelectorAll('button')].find(function(b){return b.textContent==='Me está bajando'}).click()");
+await sleep(500);
+const cicloHist = await ev("(function(){var S=Cuaderno.state();return JSON.stringify({n:(S.cycle.history||[]).length,last:S.cycle.lastStart,end:(S.cycle.history||[])[0]?S.cycle.history[0].end:'x'})})()");
+check('marcar inicio guarda el sangrado y reinicia el ciclo', JSON.parse(cicloHist).n >= 1 && JSON.parse(cicloHist).end === null, cicloHist);
 check('aparece el chequeo del día', (await ev("document.body.textContent.indexOf('¿Cómo va la fuerza hoy?') >= 0")) === true);
 const setsAntes = await ev("(function(){var S=Cuaderno.state(); var s=S.program.days[0]; var n=0; S.program.days.forEach(function(d){d.slots.forEach(function(x){n+=x.sets})}); return n})()");
 await ev("[...document.querySelectorAll('button')].find(function(b){return b.textContent==='Muy baja'}).click()");

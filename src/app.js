@@ -695,6 +695,21 @@
     ));
     card.appendChild(head);
 
+    const btns = el('div', { class: 'row tight', style: { marginTop: '8px' } });
+    const hist = S.cycle.history || [];
+    const lastPeriod = hist.length ? hist[hist.length - 1] : null;
+    const activeBleeding = !!(lastPeriod && !lastPeriod.end);
+    if (!activeBleeding) {
+      btns.appendChild(el('button', {
+        class: 'btn sm primary', text: 'Me está bajando',
+        onclick: () => markPeriodStart(date)
+      }));
+    } else {
+      btns.appendChild(el('span', { class: 'chip red', text: 'Sangrado · día ' + (CE.daysBetween(lastPeriod.start, date) + 1) }));
+      btns.appendChild(el('button', { class: 'btn sm', text: 'Terminó', onclick: () => markPeriodEnd(date) }));
+    }
+    card.appendChild(btns);
+
     if (info.day <= S.cycle.periodLength + 2 || L.cycle) {
       card.appendChild(el('p', { class: 'hint', style: { margin: '8px 0 6px' }, text: '¿Cómo va la fuerza hoy? Con esto se ajusta la sesión, no el programa.' }));
       const row = el('div', { class: 'row tight' });
@@ -727,6 +742,29 @@
       card.appendChild(el('div', { class: 'banner good', style: { marginTop: '10px' } }, el('span', { text: 'Sin ajuste: entrenas con el plan normal.' })));
     }
     return card;
+  }
+
+  function markPeriodStart(date) {
+    S.cycle.history = (S.cycle.history || []).slice();
+    const last = S.cycle.history[S.cycle.history.length - 1];
+    if (last && !last.end) last.end = date;
+    S.cycle.history.push({ start: date, end: null });
+    if (S.cycle.history.length > 12) S.cycle.history = S.cycle.history.slice(-12);
+    S.cycle.lastStart = date;
+    const avg = CE.cycleAverages(S.cycle);
+    save(true); render();
+    toast('Inicio registrado · media ' + avg.cycleLength + ' días de ciclo');
+  }
+
+  function markPeriodEnd(date) {
+    const h = S.cycle.history || [];
+    const last = h[h.length - 1];
+    if (!last || last.end) { toast('No hay un sangrado abierto'); return; }
+    if (date < last.start) { toast('La fecha es anterior al inicio'); return; }
+    last.end = date;
+    const avg = CE.cycleAverages(S.cycle);
+    save(true); render();
+    toast('Sangrado de ' + (CE.daysBetween(last.start, date) + 1) + ' días · media ' + avg.periodLength);
   }
 
   function setCycleCheck(date, L, patch) {
@@ -2759,6 +2797,8 @@
           el('span', { text: 'Próximo periodo el ' + shortDate(info.nextStart) + ' (' + info.daysToNext + ' días).' })
         ));
       }
+      const avg = CE.cycleAverages(S.cycle);
+      card.appendChild(el('p', { class: 'tiny muted', style: { marginTop: '8px' }, text: 'Tus medias con ' + avg.samples + ' registro(s): ciclo ' + avg.cycleLength + ' días · sangrado ' + avg.periodLength + ' días. La predicción usa estos números, no un 28/5 genérico.' }));
       const pat = CE.cyclePattern(S.logs, S.cycle);
       if (pat) {
         card.appendChild(el('p', { class: 'tiny muted', style: { marginTop: '8px' }, text: 'Con ' + pat.samples + ' registros: los días ' + pat.weakest.map((w) => w.day).join(', ') + ' son los que más veces marcas fuerza baja.' }));

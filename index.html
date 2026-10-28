@@ -1784,10 +1784,31 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     return Math.round((parseDate(b) - parseDate(a)) / 86400000);
   }
 
+  /* Medias reales a partir de los registros: ciclo entre inicios y duración
+     del sangrado. Con el DIU los rangos cambian, así que manda su dato. */
+  function cycleAverages(cycle) {
+    const h = ((cycle && cycle.history) || []).slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
+    const gaps = [];
+    for (let i = 1; i < h.length; i++) {
+      const g = daysBetween(h[i - 1].start, h[i].start);
+      if (g >= 15 && g <= 60) gaps.push(g);
+    }
+    const lens = h.filter(function (x) { return x.end; })
+      .map(function (x) { return daysBetween(x.start, x.end) + 1; })
+      .filter(function (n) { return n >= 1 && n <= 15; });
+    const avg = function (arr) { return arr.length ? Math.round(arr.reduce(function (a, b) { return a + b; }, 0) / arr.length) : null; };
+    return {
+      cycleLength: avg(gaps) || (cycle && cycle.cycleLength) || 28,
+      periodLength: avg(lens) || (cycle && cycle.periodLength) || 5,
+      gaps: gaps, lens: lens, samples: h.length
+    };
+  }
+
   function cycleInfo(cycle, dateISO) {
     if (!cycle || !cycle.enabled || !cycle.lastStart) return null;
-    const len = Math.max(21, Math.min(45, cycle.cycleLength || 28));
-    const period = Math.max(2, Math.min(10, cycle.periodLength || 5));
+    const avg = cycleAverages(cycle);
+    const len = Math.max(21, Math.min(45, avg.cycleLength));
+    const period = Math.max(2, Math.min(14, avg.periodLength));
     const d = daysBetween(cycle.lastStart, dateISO);
     const day = ((d % len) + len) % len + 1;
     let phase = 'folicular';
@@ -1797,9 +1818,12 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     else phase = 'lutea';
     const cyclesDone = Math.floor(d / len) + 1;
     const nextStart = toISODate(addDays(cycle.lastStart, cyclesDone * len));
+    const active = ((cycle.history || []).slice(-1)[0] || null);
     return {
       day: day, phase: phase, cycleLength: len, periodLength: period,
-      nextStart: nextStart, daysToNext: Math.max(0, daysBetween(dateISO, nextStart))
+      nextStart: nextStart, daysToNext: Math.max(0, daysBetween(dateISO, nextStart)),
+      average: avg,
+      bleeding: !!(active && !active.end && daysBetween(active.start, dateISO) >= 0 && daysBetween(active.start, dateISO) < len)
     };
   }
 
@@ -2467,6 +2491,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     e1rm: e1rm, exerciseHistory: exerciseHistory, stagnation: stagnation, projectBlock: projectBlock,
     weekReport: weekReport, reportText: reportText, bestE1rm: bestE1rm,
     deloadSignal: deloadSignal, phaseFor: phaseFor, isExtraDeload: isExtraDeload,
+    cycleAverages: cycleAverages,
     platesFor: platesFor, platesLabel: platesLabel, warmupRamp: warmupRamp, isBarbellExercise: isBarbellExercise, BAR_KG: BAR_KG,
     loadStep: loadStep, nearestLoadable: nearestLoadable,
     swapOptions: swapOptions, sessionRedundancy: sessionRedundancy, movementFamily: movementFamily,
@@ -3439,6 +3464,21 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     ));
     card.appendChild(head);
 
+    const btns = el('div', { class: 'row tight', style: { marginTop: '8px' } });
+    const hist = S.cycle.history || [];
+    const lastPeriod = hist.length ? hist[hist.length - 1] : null;
+    const activeBleeding = !!(lastPeriod && !lastPeriod.end);
+    if (!activeBleeding) {
+      btns.appendChild(el('button', {
+        class: 'btn sm primary', text: 'Me está bajando',
+        onclick: () => markPeriodStart(date)
+      }));
+    } else {
+      btns.appendChild(el('span', { class: 'chip red', text: 'Sangrado · día ' + (CE.daysBetween(lastPeriod.start, date) + 1) }));
+      btns.appendChild(el('button', { class: 'btn sm', text: 'Terminó', onclick: () => markPeriodEnd(date) }));
+    }
+    card.appendChild(btns);
+
     if (info.day <= S.cycle.periodLength + 2 || L.cycle) {
       card.appendChild(el('p', { class: 'hint', style: { margin: '8px 0 6px' }, text: '¿Cómo va la fuerza hoy? Con esto se ajusta la sesión, no el programa.' }));
       const row = el('div', { class: 'row tight' });
@@ -3471,6 +3511,29 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
       card.appendChild(el('div', { class: 'banner good', style: { marginTop: '10px' } }, el('span', { text: 'Sin ajuste: entrenas con el plan normal.' })));
     }
     return card;
+  }
+
+  function markPeriodStart(date) {
+    S.cycle.history = (S.cycle.history || []).slice();
+    const last = S.cycle.history[S.cycle.history.length - 1];
+    if (last && !last.end) last.end = date;
+    S.cycle.history.push({ start: date, end: null });
+    if (S.cycle.history.length > 12) S.cycle.history = S.cycle.history.slice(-12);
+    S.cycle.lastStart = date;
+    const avg = CE.cycleAverages(S.cycle);
+    save(true); render();
+    toast('Inicio registrado · media ' + avg.cycleLength + ' días de ciclo');
+  }
+
+  function markPeriodEnd(date) {
+    const h = S.cycle.history || [];
+    const last = h[h.length - 1];
+    if (!last || last.end) { toast('No hay un sangrado abierto'); return; }
+    if (date < last.start) { toast('La fecha es anterior al inicio'); return; }
+    last.end = date;
+    const avg = CE.cycleAverages(S.cycle);
+    save(true); render();
+    toast('Sangrado de ' + (CE.daysBetween(last.start, date) + 1) + ' días · media ' + avg.periodLength);
   }
 
   function setCycleCheck(date, L, patch) {
@@ -5503,6 +5566,8 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
           el('span', { text: 'Próximo periodo el ' + shortDate(info.nextStart) + ' (' + info.daysToNext + ' días).' })
         ));
       }
+      const avg = CE.cycleAverages(S.cycle);
+      card.appendChild(el('p', { class: 'tiny muted', style: { marginTop: '8px' }, text: 'Tus medias con ' + avg.samples + ' registro(s): ciclo ' + avg.cycleLength + ' días · sangrado ' + avg.periodLength + ' días. La predicción usa estos números, no un 28/5 genérico.' }));
       const pat = CE.cyclePattern(S.logs, S.cycle);
       if (pat) {
         card.appendChild(el('p', { class: 'tiny muted', style: { marginTop: '8px' }, text: 'Con ' + pat.samples + ' registros: los días ' + pat.weakest.map((w) => w.day).join(', ') + ' son los que más veces marcas fuerza baja.' }));

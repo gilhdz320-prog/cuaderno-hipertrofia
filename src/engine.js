@@ -1054,10 +1054,31 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     return Math.round((parseDate(b) - parseDate(a)) / 86400000);
   }
 
+  /* Medias reales a partir de los registros: ciclo entre inicios y duración
+     del sangrado. Con el DIU los rangos cambian, así que manda su dato. */
+  function cycleAverages(cycle) {
+    const h = ((cycle && cycle.history) || []).slice().sort(function (a, b) { return a.start < b.start ? -1 : 1; });
+    const gaps = [];
+    for (let i = 1; i < h.length; i++) {
+      const g = daysBetween(h[i - 1].start, h[i].start);
+      if (g >= 15 && g <= 60) gaps.push(g);
+    }
+    const lens = h.filter(function (x) { return x.end; })
+      .map(function (x) { return daysBetween(x.start, x.end) + 1; })
+      .filter(function (n) { return n >= 1 && n <= 15; });
+    const avg = function (arr) { return arr.length ? Math.round(arr.reduce(function (a, b) { return a + b; }, 0) / arr.length) : null; };
+    return {
+      cycleLength: avg(gaps) || (cycle && cycle.cycleLength) || 28,
+      periodLength: avg(lens) || (cycle && cycle.periodLength) || 5,
+      gaps: gaps, lens: lens, samples: h.length
+    };
+  }
+
   function cycleInfo(cycle, dateISO) {
     if (!cycle || !cycle.enabled || !cycle.lastStart) return null;
-    const len = Math.max(21, Math.min(45, cycle.cycleLength || 28));
-    const period = Math.max(2, Math.min(10, cycle.periodLength || 5));
+    const avg = cycleAverages(cycle);
+    const len = Math.max(21, Math.min(45, avg.cycleLength));
+    const period = Math.max(2, Math.min(14, avg.periodLength));
     const d = daysBetween(cycle.lastStart, dateISO);
     const day = ((d % len) + len) % len + 1;
     let phase = 'folicular';
@@ -1067,9 +1088,12 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     else phase = 'lutea';
     const cyclesDone = Math.floor(d / len) + 1;
     const nextStart = toISODate(addDays(cycle.lastStart, cyclesDone * len));
+    const active = ((cycle.history || []).slice(-1)[0] || null);
     return {
       day: day, phase: phase, cycleLength: len, periodLength: period,
-      nextStart: nextStart, daysToNext: Math.max(0, daysBetween(dateISO, nextStart))
+      nextStart: nextStart, daysToNext: Math.max(0, daysBetween(dateISO, nextStart)),
+      average: avg,
+      bleeding: !!(active && !active.end && daysBetween(active.start, dateISO) >= 0 && daysBetween(active.start, dateISO) < len)
     };
   }
 
@@ -1737,6 +1761,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     e1rm: e1rm, exerciseHistory: exerciseHistory, stagnation: stagnation, projectBlock: projectBlock,
     weekReport: weekReport, reportText: reportText, bestE1rm: bestE1rm,
     deloadSignal: deloadSignal, phaseFor: phaseFor, isExtraDeload: isExtraDeload,
+    cycleAverages: cycleAverages,
     platesFor: platesFor, platesLabel: platesLabel, warmupRamp: warmupRamp, isBarbellExercise: isBarbellExercise, BAR_KG: BAR_KG,
     loadStep: loadStep, nearestLoadable: nearestLoadable,
     swapOptions: swapOptions, sessionRedundancy: sessionRedundancy, movementFamily: movementFamily,
