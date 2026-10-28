@@ -3232,6 +3232,7 @@
       el('label', { class: 'btn sm', text: 'Importar .json' },
         el('input', { type: 'file', accept: '.json,application/json', class: 'hidden', onchange: (ev) => importJSON(ev.target.files[0]) })
       ),
+      el('button', { class: 'btn sm', text: 'Buscar actualización', onclick: checkUpdate }),
       el('button', { class: 'btn sm ghost', text: 'Borrar todo', onclick: confirmReset })
     ));
     const bkBox = el('div', { style: { marginTop: '12px' } });
@@ -3600,6 +3601,7 @@
    * PWA: instalar, offline y actualizaciones
    * ------------------------------------------------------------------ */
   let DEFERRED_PROMPT = null;
+  let SW_REG = null;
 
   function isStandalone() {
     return window.navigator.standalone === true ||
@@ -3618,6 +3620,18 @@
         onclick: () => { try { localStorage.setItem('cuaderno.iosInstall', '1'); } catch (e) {} render(); }
       })
     );
+  }
+
+  function checkUpdate() {
+    if (!SW_REG) { toast('Abre la app desde el enlace para poder actualizar'); return; }
+    toast('Buscando versión nueva…');
+    SW_REG.update().then(function () {
+      if (SW_REG.waiting || SW_REG.installing) {
+        toast('Hay una versión nueva', { label: 'recargar', onClick: () => location.reload() });
+      } else {
+        toast('Ya estás en la última versión');
+      }
+    }).catch(function () { toast('No se pudo comprobar la versión'); });
   }
 
   function setupPWA() {
@@ -3647,6 +3661,7 @@
 
     if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
     navigator.serviceWorker.register('sw.js').then((reg) => {
+      SW_REG = reg;
       reg.addEventListener('updatefound', () => {
         const sw = reg.installing;
         if (!sw) return;
