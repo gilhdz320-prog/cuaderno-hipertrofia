@@ -237,8 +237,13 @@
     if (SYNC_STATE === 'off') { chip.classList.add('hidden'); return; }
     chip.classList.remove('hidden');
     chip.className = 'chip ' + (SYNC_STATE === 'on' ? 'green' : SYNC_STATE === 'error' ? 'red' : 'amber');
-    chip.textContent = SYNC_STATE === 'on' ? 'nube' : SYNC_STATE === 'syncing' ? 'guardando…' : 'sin nube';
-    chip.title = SYNC_ERR || (SYNC_LAST ? 'Última sincronización: ' + SYNC_LAST.toLocaleTimeString('es-ES') : '');
+    chip.textContent = SYNC_STATE === 'on' ? '☁︎ sincronizado'
+      : SYNC_STATE === 'syncing' ? '☁︎ guardando…'
+      : '☁︎ sin conexión';
+    const mail = SYNC_CLIENT && SYNC_CLIENT.userEmail ? SYNC_CLIENT.userEmail() : '';
+    chip.title = SYNC_ERR || (SYNC_STATE === 'on'
+      ? 'En la nube' + (mail ? ' como ' + mail : '') + (SYNC_LAST ? ' · última vez ' + SYNC_LAST.toLocaleTimeString('es-ES') : '')
+      : 'Tu cuaderno está solo en este navegador');
   }
 
   function scheduleSync() {

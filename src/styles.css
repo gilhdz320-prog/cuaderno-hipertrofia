@@ -510,6 +510,8 @@ label.btn { cursor: pointer; }
 
 @media (max-width: 560px) {
   #freqChip { display: none; }
+  #syncChip { font-size: 0; padding: 4px 7px; }
+  #syncChip::before { content: "☁︎"; font-size: .8rem; }
   main { padding: 18px 14px 110px; }
   .card { padding: 15px 16px; border-radius: 12px; }
   .vol-row { grid-template-columns: minmax(92px, 112px) 1fr 36px; gap: 8px; }
