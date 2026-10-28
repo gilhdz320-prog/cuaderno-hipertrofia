@@ -174,6 +174,31 @@
     flashT = setTimeout(() => { if (!storageOK) return; }, 1200);
   }
 
+  /* SQL de instalación. Mantener en sintonía con supabase/schema.sql */
+  const SETUP_SQL = [
+    'create table if not exists public.profiles (',
+    '  id text primary key,',
+    '  user_id uuid not null references auth.users (id) on delete cascade,',
+    "  name text not null default 'Atleta',",
+    "  data jsonb not null default '{}'::jsonb,",
+    '  updated_at timestamptz not null default now()',
+    ');',
+    'create index if not exists profiles_user_id_idx on public.profiles (user_id);',
+    'alter table public.profiles enable row level security;',
+    'drop policy if exists "own rows" on public.profiles;',
+    'create policy "own rows" on public.profiles for all',
+    '  using (auth.uid() = user_id) with check (auth.uid() = user_id);'
+  ].join('\n');
+
+  function copyText(text) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text).then(function () { return true; }).catch(function () { return false; });
+      }
+    } catch (e) {}
+    return Promise.resolve(false);
+  }
+
   /* ---------- sincronización (Supabase) ---------- */
   const SYNC_CFG_KEY = 'cuaderno.supabase';
   let SYNC_CLIENT = null;
@@ -2354,6 +2379,26 @@
         el('label', { class: 'fld' }, 'URL del proyecto', url),
         el('label', { class: 'fld' }, 'anon key', key)
       ));
+      const det = el('details', { style: { marginTop: '12px' } });
+      det.appendChild(el('summary', { style: { cursor: 'pointer', fontSize: '.85rem', fontWeight: '600' }, text: 'Paso 1: crear la tabla en Supabase (SQL)' }));
+      const pre = el('pre', { class: 'sql', text: SETUP_SQL });
+      det.appendChild(pre);
+      det.appendChild(el('div', { class: 'row tight', style: { marginTop: '6px' } },
+        el('button', {
+          class: 'btn sm', text: 'Copiar SQL',
+          onclick: () => copyText(SETUP_SQL).then(function (ok) {
+            if (ok) toast('SQL copiado: pégalo en Supabase → SQL Editor');
+            else {
+              const r = document.createRange(); r.selectNodeContents(pre);
+              const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+              toast('Seleccionado: copia con Cmd + C');
+            }
+          })
+        }),
+        el('span', { class: 'tiny muted', text: 'Supabase → SQL Editor → New query → pegar → Run' })
+      ));
+      card.appendChild(det);
+
       card.appendChild(el('div', { class: 'row', style: { marginTop: '10px' } },
         el('button', {
           class: 'btn sm primary', text: 'Guardar configuración',
