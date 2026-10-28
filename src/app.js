@@ -82,6 +82,10 @@
     return function () { const a = arguments, self = this; clearTimeout(t); t = setTimeout(() => fn.apply(self, a), ms); };
   }
 
+  const TRAIN_KEY = 'cuaderno.trainmode';
+  function trainMode() { try { return localStorage.getItem(TRAIN_KEY) === '1'; } catch (e) { return false; } }
+  function setTrainMode(v) { try { localStorage.setItem(TRAIN_KEY, v ? '1' : '0'); } catch (e) {} render(); }
+
   function weekdayOf(dateISO) {
     const d = CE.parseDate(dateISO).getDay();
     return d === 0 ? 7 : d;
@@ -285,6 +289,84 @@
     }
   }
 
+  /* ---------- copias de seguridad (IndexedDB: no ocupa localStorage) ---------- */
+  const BK_DB = 'cuaderno-backups';
+  const BK_STORE = 'days';
+  const BK_MAX = 14;
+
+  function bkOpen() {
+    return new Promise(function (res, rej) {
+      if (!window.indexedDB) { rej(new Error('sin IndexedDB')); return; }
+      const req = indexedDB.open(BK_DB, 1);
+      req.onupgradeneeded = function () {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(BK_STORE)) db.createObjectStore(BK_STORE, { keyPath: 'day' });
+      };
+      req.onsuccess = function () { res(req.result); };
+      req.onerror = function () { rej(req.error); };
+    });
+  }
+
+  function bkPut(day, data) {
+    return bkOpen().then(function (db) {
+      return new Promise(function (res, rej) {
+        const tx = db.transaction(BK_STORE, 'readwrite');
+        tx.objectStore(BK_STORE).put({ day: day, at: Date.now(), data: data });
+        tx.oncomplete = function () { res(true); };
+        tx.onerror = function () { rej(tx.error); };
+      });
+    });
+  }
+
+  function bkList() {
+    return bkOpen().then(function (db) {
+      return new Promise(function (res, rej) {
+        const tx = db.transaction(BK_STORE, 'readonly');
+        const req = tx.objectStore(BK_STORE).getAll();
+        req.onsuccess = function () {
+          const rows = (req.result || []).sort(function (a, b) { return a.day < b.day ? 1 : -1; });
+          res(rows.map(function (r) { return { day: r.day, at: r.at, kb: Math.round((r.data || '').length / 1024) }; }));
+        };
+        req.onerror = function () { rej(req.error); };
+      });
+    });
+  }
+
+  function bkGet(day) {
+    return bkOpen().then(function (db) {
+      return new Promise(function (res, rej) {
+        const tx = db.transaction(BK_STORE, 'readonly');
+        const req = tx.objectStore(BK_STORE).get(day);
+        req.onsuccess = function () { res(req.result ? req.result.data : null); };
+        req.onerror = function () { rej(req.error); };
+      });
+    });
+  }
+
+  function bkPrune() {
+    return bkList().then(function (rows) {
+      if (rows.length <= BK_MAX) return rows.length;
+      const extra = rows.slice(BK_MAX);
+      return bkOpen().then(function (db) {
+        return new Promise(function (res) {
+          const tx = db.transaction(BK_STORE, 'readwrite');
+          extra.forEach(function (r) { tx.objectStore(BK_STORE).delete(r.day); });
+          tx.oncomplete = function () { res(rows.length - extra.length); };
+          tx.onerror = function () { res(rows.length); };
+        });
+      });
+    });
+  }
+
+  /* una foto al día, de cómo estaba el cuaderno al abrirlo */
+  function snapshotToday() {
+    const day = todayISO();
+    return bkList().then(function (rows) {
+      if (rows.some(function (r) { return r.day === day; })) return false;
+      return bkPut(day, JSON.stringify(DB)).then(function () { return bkPrune(); }).then(function () { return true; });
+    }).catch(function () { return false; });
+  }
+
   function refreshDerived() {
     if (DB && DB.profiles && DB.profiles[DB.activeId]) S = DB.profiles[DB.activeId];
     EX = CE.getExMap(S.custom);
@@ -453,6 +535,12 @@
     }
     wrap.appendChild(head);
 
+    if (day && !trainMode()) {
+      wrap.appendChild(el('div', { class: 'row', style: { marginTop: '-6px' } },
+        el('button', { class: 'btn sm', text: 'Modo entrenamiento', onclick: () => setTrainMode(true) })
+      ));
+    }
+
     if (!day) {
       wrap.appendChild(restCard(date, L));
       return wrap;
@@ -480,15 +568,26 @@
       ));
     }
 
-    /* preparación */
-    wrap.appendChild(readinessCard(date, L));
-    const cyc = cycleCard(date, L);
-    if (cyc) wrap.appendChild(cyc);
+    const training = trainMode();
 
-    if (phaseNow().id === 'cal') {
+    /* preparación */
+    if (!training) {
+      wrap.appendChild(readinessCard(date, L));
+      const cyc = cycleCard(date, L);
+      if (cyc) wrap.appendChild(cyc);
+    }
+
+    if (!training && phaseNow().id === 'cal') {
       wrap.appendChild(el('div', { class: 'banner good' },
         el('b', { text: 'Semana 1: calibración. ' }),
         el('span', { text: 'Deja 3 repeticiones en reserva y no busques récords. Las cargas de partida son una sugerencia calculada sobre tu peso: ajústalas en la primera serie y quedarán fijadas.' })
+      ));
+    }
+
+    if (training) {
+      wrap.appendChild(el('div', { class: 'row between card tight' },
+        el('span', { class: 'tiny muted', text: 'Modo entrenamiento: solo lo esencial' }),
+        el('button', { class: 'btn sm ghost', text: 'salir', onclick: () => setTrainMode(false) })
       ));
     }
 
@@ -675,7 +774,7 @@
     if (slot.flagged === 'sin-equipo') {
       title.appendChild(el('span', { class: 'pill', style: { borderColor: 'var(--amber)', color: 'var(--amber)' }, text: 'necesita ' + CE.requiredEquipment(ex).filter((t) => t !== 'peso_corporal').map((t) => ((CE.EQUIPMENT.filter((e) => e.id === t)[0] || {}).label || t).toLowerCase()).join(' o ') }));
     }
-    if (last) {
+    if (last && !trainMode()) {
       const sets = last.entry.sets.filter(s => s && s.reps);
       const maxLoad = Math.max.apply(null, sets.map(s => s.load || 0).concat([0]));
       title.appendChild(el('span', { class: 'prev', text: 'última vez (' + shortDate(last.date) + '): ' + kg(maxLoad) + ' kg · ' + sets.map(s => s.reps).join('/') }));
@@ -743,7 +842,7 @@
     body.appendChild(sets);
 
     /* consejo de progresión */
-    if (advised && advised.action !== 'calibrar') {
+    if (!trainMode() && advised && advised.action !== 'calibrar') {
       const cls = advised.action === 'subir' ? 'up' : advised.action === 'bajar' ? 'down' : '';
       const box = el('div', { class: 'advice ' + cls });
       box.appendChild(el('span', { class: 'ico', text: advised.action === 'subir' ? '↑' : advised.action === 'bajar' ? '↓' : '=' }));
@@ -761,6 +860,7 @@
     }
 
     /* pie */
+    if (!trainMode()) {
     const foot = el('div', { class: 'ex-foot' });
     const left = el('div', { class: 'load-edit' });
     if (Math.abs((entry.load || 0) - (S.loads[slot.ex] || 0)) > 0.01) {
@@ -780,6 +880,7 @@
       }));
     }
     body.appendChild(foot);
+    }
     card.appendChild(body);
     if (entry.sets.some(s => s.done)) card.classList.add('is-done');
     return card;
@@ -2840,7 +2941,53 @@
       ),
       el('button', { class: 'btn sm ghost', text: 'Borrar todo', onclick: confirmReset })
     ));
+    const bkBox = el('div', { style: { marginTop: '12px' } });
+    card.appendChild(bkBox);
+    renderBackups(bkBox);
     return card;
+  }
+
+  function renderBackups(box) {
+    clear(box);
+    box.appendChild(el('div', { class: 'card-title' }, el('h3', { text: 'Copias automáticas' }), el('span', { class: 'meta', text: 'una al día · últimas 14' })));
+    bkList().then(function (rows) {
+      if (!rows.length) {
+        box.appendChild(el('p', { class: 'tiny muted', text: 'La primera copia se guarda al abrir la app. Aquí aparecerán las últimas 14.' }));
+        return;
+      }
+      rows.forEach(function (r) {
+        box.appendChild(el('div', { class: 'row between', style: { padding: '7px 0', borderBottom: '1px solid var(--line)' } },
+          el('div', {}, el('b', { class: 'tiny', text: shortDate(r.day) }), el('span', { class: 'tiny muted', text: ' · ' + r.kb + ' KB' })),
+          el('button', {
+            class: 'btn sm ghost', text: 'restaurar',
+            onclick: () => {
+              openSheet('Restaurar el cuaderno del ' + shortDate(r.day), 'Se reemplaza todo lo actual por esa copia. Lo que hayas hecho después de esa fecha se pierde.', el('div', {}), [
+                { label: 'Cancelar', ghost: true, onClick: closeSheet },
+                {
+                  label: 'Restaurar', primary: true, onClick: () => {
+                    bkGet(r.day).then(function (raw) {
+                      if (!raw) { toast('Esa copia está vacía'); return; }
+                      DB = CE.migrateState(JSON.parse(raw));
+                      S = DB.profiles[DB.activeId];
+                      save(true); refreshDerived(); closeSheet(); render();
+                      toast('Restaurado el ' + shortDate(r.day));
+                    }).catch(function () { toast('No se pudo restaurar'); });
+                  }
+                }
+              ]);
+            }
+          })
+        ));
+      });
+      box.appendChild(el('div', { class: 'row', style: { marginTop: '8px' } },
+        el('button', {
+          class: 'btn sm', text: 'Copia manual ahora',
+          onclick: () => bkPut(todayISO() + '-' + Date.now(), JSON.stringify(DB)).then(function () { renderBackups(box); toast('Copia guardada'); }).catch(function () { toast('No se pudo guardar la copia'); })
+        })
+      ));
+    }).catch(function () {
+      box.appendChild(el('p', { class: 'tiny muted', text: 'Este navegador no permite copias locales.' }));
+    });
   }
 
   /* ------------------------------------------------------------------ *
@@ -3136,6 +3283,7 @@
    * render raíz
    * ------------------------------------------------------------------ */
   function render() {
+    document.body.classList.toggle('train-mode', trainMode());
     refreshDerived();
     renderChrome();
     const root = $('#view');
@@ -3276,6 +3424,7 @@
     }
 
     save(true);
+    snapshotToday();
     const params = new URLSearchParams(location.search);
     if (!S.onboarded && params.get('demo') !== '1' && params.get('selftest') !== '1') openOnboarding();
     if (new URLSearchParams(location.search).get('selftest') === '1') return runSelfTest();

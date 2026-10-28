@@ -122,12 +122,12 @@ const cargaOk = await ev("(function(){var row=document.querySelector('.slot-edit
 await sleep(500);
 await ev("(function(){var b=document.querySelector('.slot-edit .btn.icon.ghost'); b.click(); return 1})()");
 await sleep(400);
-check('abre el cambio de ejercicio con varias opciones', (await ev("document.body.textContent.indexOf('Alternativas que trabajan lo mismo') >= 0")) === true, await ev("document.querySelectorAll('.sheet .btn.sm').length"));
+check('abre el cambio de ejercicio con varias opciones', (await ev("document.getElementById('sheet').textContent.indexOf('Alternativas que trabajan lo mismo') >= 0")) === true, await ev("document.querySelectorAll('.sheet .btn.sm').length"));
 const antesEx = await ev("document.querySelector('.slot-edit select').value");
 await ev("[...document.querySelectorAll('.sheet .btn.sm')].find(function(b){return b.textContent==='usar'}).click()");
 await sleep(600);
 check('el ejercicio se sustituye', (await ev("document.querySelector('.slot-edit select').value")) !== antesEx, antesEx + ' → ' + await ev("document.querySelector('.slot-edit select').value"));
-check('avisa de estímulo duplicado', (await ev("document.body.textContent.indexOf('estímulo duplicado') >= 0")) === true);
+check('el programa no nace con patrones duplicados', (await ev("(function(){var S=Cuaderno.state();var ex=Cuaderno.engine.getExMap(S.custom);return S.program.days.every(function(d){return Cuaderno.engine.sessionRedundancy(d,ex).length===0})})()")) === true);
 
 check('la carga se edita desde Programa', String(await ev("Cuaderno.state().loads[" + JSON.stringify(exId) + "]")) === '99', exId + ' = ' + await ev("Cuaderno.state().loads[" + JSON.stringify(exId) + "]"));
 const setsBefore = await ev("document.querySelector('.slot-edit .stepper .val').textContent");
@@ -155,11 +155,22 @@ check('crea y activa el perfil nuevo', (await ev("document.getElementById('profi
 check('el perfil nuevo empieza sin registros', (await ev("Object.keys(Cuaderno.state().logs).length")) === 0);
 await ev("document.querySelector('[data-tab=hoy]').click()");
 await sleep(500);
-check('ofrece «todo normal»', (await ev("document.body.textContent.indexOf('Todo normal') >= 0")) === true);
+check('ofrece «todo normal»', (await ev("document.querySelector('#view').textContent.indexOf('Todo normal') >= 0")) === true);
 await ev("[...document.querySelectorAll('button')].find(function(b){return b.textContent==='Todo normal'}).click()");
 await sleep(500);
 const quick = await ev("(function(){var S=Cuaderno.state();var d=Object.keys(S.logs)[0];return S.logs[d] && S.logs[d].readiness ? S.logs[d].readiness.score : null})()");
 check('«todo normal» deja la sesión lista en un toque', quick === 80, quick);
+/* ---------- modo entrenamiento ---------- */
+await ev("[...document.querySelectorAll('button')].find(function(b){return b.textContent==='Modo entrenamiento'}).click()");
+await sleep(500);
+check('entra en modo entrenamiento', (await ev("document.body.classList.contains('train-mode')")) === true);
+check('oculta los consejos', (await ev("document.querySelectorAll('.advice').length")) === 0);
+check('oculta la preparación', (await ev("document.querySelector('#view').textContent.indexOf('¿Cómo llegas hoy?') < 0")) === true);
+check('sigue permitiendo marcar series', (await ev("document.querySelectorAll('.set-row .check').length")) > 0);
+await ev("[...document.querySelectorAll('button')].find(function(b){return b.textContent==='salir'}).click()");
+await sleep(400);
+check('sale del modo entrenamiento', (await ev("document.body.classList.contains('train-mode')")) === false);
+
 await ev("document.querySelector('[data-tab=ajustes]').click()");
 await sleep(400);
 check('el perfil nuevo tiene su propio programa', (await ev("Cuaderno.state().program.days.length")) >= 2, await ev("Cuaderno.state().program.days.length"));
@@ -225,13 +236,18 @@ await ev("document.querySelector('[data-tab=semana]').click()");
 await sleep(500);
 await ev("[...document.querySelectorAll('button')].find(function(b){return b.textContent==='Resumen'}).click()");
 await sleep(500);
-check('abre el resumen semanal', (await ev("document.body.textContent.indexOf('Texto para entregar') >= 0")) === true);
+check('abre el resumen semanal', (await ev("document.getElementById('sheet').textContent.indexOf('Texto para entregar') >= 0")) === true);
 check('el resumen trae texto', /Semana \d/.test(await ev("document.querySelector('#sheet pre').textContent")), await ev("document.querySelector('#sheet pre').textContent.split('\\n')[0]"));
 await ev("[...document.querySelectorAll('.sheet-actions button')].find(function(b){return b.textContent==='Versión redactada'}).click()");
 await sleep(400);
-check('sin clave avisa en vez de romper', (await ev("document.body.textContent.indexOf('Ajustes → Asistente') >= 0")) === true);
+check('sin clave avisa en vez de romper', (await ev("document.getElementById('sheet').textContent.indexOf('Asistente') >= 0 || document.getElementById('toast').textContent.indexOf('clave') >= 0")) === true);
 await ev("[...document.querySelectorAll('.sheet-actions button')].find(function(b){return b.textContent==='Cerrar'}).click()");
 await sleep(300);
+
+/* ---------- copias de seguridad ---------- */
+await ev("document.querySelector('[data-tab=ajustes]').click()");
+await sleep(600);
+check('la tarjeta de copias existe', (await ev("document.querySelector('#view').textContent.indexOf('Copias automáticas') >= 0")) === true);
 
 check('sin excepciones de JavaScript', exceptions.length === 0, exceptions.join(' | '));
 

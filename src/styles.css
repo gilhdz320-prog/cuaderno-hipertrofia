@@ -622,3 +622,12 @@ details[open] > summary::before { content: "▾ "; }
 
 /* valores precargados de la sesión anterior: se ven distintos hasta que los tocas */
 .set-row input.prefilled { color: var(--muted); }
+
+
+/* ---------- modo entrenamiento ---------- */
+body.train-mode .tabs { opacity: .55; }
+body.train-mode .set-row { grid-template-columns: 20px 1fr 1fr .8fr 52px; gap: 8px; }
+body.train-mode .set-row input { min-height: 46px; font-size: 1rem; }
+body.train-mode .set-row .check { width: 52px; height: 46px; font-size: 1.1rem; }
+body.train-mode .ex + .ex { margin-top: 8px; }
+body.train-mode .ex-body { padding: 10px 14px 12px; }

@@ -333,3 +333,26 @@ test('proyección de carga: sube y respeta las descargas', () => {
   assert.equal(p[5].load, p[4].load, 'la descarga no sube carga');
   for (let i = 1; i < p.length; i++) assert.ok(p[i].load >= p[i - 1].load, 'nunca baja');
 });
+
+test('detector de estímulo duplicado por familia de movimiento', () => {
+  const ex = CE.getExMap([]);
+  const conDosPresses = { id: 'x', weekday: 1, name: 'Prueba', slots: [
+    { ex: 'bench', sets: 3, reps: [6, 8], rir: 2 },
+    { ex: 'incline_db', sets: 3, reps: [8, 10], rir: 2 }
+  ] };
+  const r = CE.sessionRedundancy(conDosPresses, ex);
+  assert.equal(r.length, 1, 'banca + inclinado es el mismo patrón');
+  assert.equal(r[0].label, 'Pecho');
+
+  const bancaYAperturas = { id: 'y', weekday: 1, name: 'Prueba', slots: [
+    { ex: 'bench', sets: 3, reps: [6, 8], rir: 2 },
+    { ex: 'cable_fly', sets: 3, reps: [10, 15], rir: 1 }
+  ] };
+  assert.equal(CE.sessionRedundancy(bancaYAperturas, ex).length, 0, 'press y apertura no duplican');
+
+  const planos = { id: 'z', weekday: 1, name: 'Prueba', slots: [
+    { ex: 'lat_pulldown', sets: 3, reps: [8, 10], rir: 1.5 },
+    { ex: 'row_barbell', sets: 3, reps: [8, 10], rir: 1.5 }
+  ] };
+  assert.equal(CE.sessionRedundancy(planos, ex).length, 0, 'jalón y remo son planos distintos');
+});
