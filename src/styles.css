@@ -606,3 +606,15 @@ details[open] > summary::before { content: "▾ "; }
 [data-theme="light"] .set-row .check[aria-checked="true"] { color: #fff; box-shadow: none; }
 [data-theme="light"] .ex.is-done { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
 [data-theme="light"] .ex.is-done .ex-head { background: rgba(77, 124, 15, .06); }
+
+
+/* cabecera de columnas del editor de programa */
+.slot-head {
+  display: grid;
+  grid-template-columns: minmax(140px, 2.2fr) 104px 128px 100px 72px auto;
+  gap: 6px; align-items: center;
+  padding: 4px 0 6px; border-bottom: 1px solid var(--line);
+  font-size: .62rem; font-weight: 650; text-transform: uppercase; letter-spacing: .09em; color: var(--muted);
+}
+.slot-head .c { text-align: center; }
+@media (max-width: 780px) { .slot-head { display: none; } }

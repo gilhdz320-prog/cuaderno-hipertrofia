@@ -1255,6 +1255,10 @@
         )
       );
       card.appendChild(title);
+      card.appendChild(el('div', { class: 'slot-head' },
+        el('span', { text: 'Ejercicio' }), el('span', { class: 'c', text: 'Series' }), el('span', { class: 'c', text: 'Reps' }),
+        el('span', { class: 'c', text: 'RIR' }), el('span', { class: 'c', text: 'Descanso (s)' }), el('span', {})
+      ));
       day.slots.forEach((slot, si) => card.appendChild(slotEditor(day, slot, si)));
       wrap.appendChild(card);
     });
@@ -1306,7 +1310,6 @@
 
     const band = CE.repsBandFor(ex);
     const fuera = slot.reps[0] < band[0] || slot.reps[1] > band[1];
-    if (fuera) row.appendChild(el('span', { class: 'tiny amber', style: { gridColumn: '1 / -1' }, text: 'sugerido para este tipo: ' + band[0] + '–' + band[1] + ' reps' }));
     const reps = el('div', { class: 'reps' });
     reps.appendChild(el('input', { type: 'number', min: '1', max: '40', value: slot.reps[0], 'aria-label': 'reps mínimo', onchange: (ev) => { slot.reps[0] = Math.max(1, num(ev.target.value)); save(); render(); } }));
     reps.appendChild(el('span', { class: 'muted', text: '–' }));
@@ -1317,18 +1320,29 @@
     [0, 1, 1.5, 2, 2.5, 3, 4].forEach(v => rir.appendChild(el('option', { value: v, text: 'RIR ' + v, selected: v === slot.rir ? true : null })));
     row.appendChild(rir);
 
-    row.appendChild(el('input', { type: 'number', min: '0', step: '15', value: slot.rest || ex.rest, 'aria-label': 'descanso en segundos', title: 'descanso en segundos', onchange: (ev) => { slot.rest = num(ev.target.value); save(); render(); } }));
+    row.appendChild(el('input', { type: 'number', min: '0', step: '15', value: slot.rest || ex.rest, 'aria-label': 'descanso en segundos', title: 'descanso en segundos', title: 'Descanso entre series, en segundos. 180 = 3:00', placeholder: 'seg', onchange: (ev) => { slot.rest = num(ev.target.value); save(); render(); } }));
 
-    if (slot.flagged === 'sin-equipo') {
-      row.appendChild(el('div', { class: 'row', style: { gridColumn: '1 / -1', marginTop: '2px' } },
-        el('span', { class: 'pill', style: { borderColor: 'var(--amber)', color: 'var(--amber)' }, text: 'no tienes el material: ' + CE.requiredEquipment(ex).filter((t) => t !== 'peso_corporal').map((t) => ((CE.EQUIPMENT.filter((e) => e.id === t)[0] || {}).label || t).toLowerCase()).join(' o ') })
-      ));
-    }
     const tools = el('div', { class: 'row tight', style: { gap: '2px' } });
     tools.appendChild(el('button', { class: 'btn icon ghost', text: '↑', title: 'subir', disabled: si === 0, onclick: () => { swapSlots(day, si, si - 1); } }));
     tools.appendChild(el('button', { class: 'btn icon ghost', text: '↓', title: 'bajar', disabled: si === day.slots.length - 1, onclick: () => { swapSlots(day, si, si + 1); } }));
-    tools.appendChild(el('button', { class: 'btn icon ghost', text: '✕', title: 'quitar', onclick: () => { day.slots.splice(si, 1); save(); render(); toast('Ejercicio quitado'); } }));
+    tools.appendChild(el('button', {
+      class: 'btn icon ghost', text: '✕', title: 'quitar',
+      onclick: () => {
+        const quitado = day.slots.splice(si, 1)[0];
+        save(); render();
+        toast('«' + CE.exOf(quitado.ex, EX).name + '» quitado', {
+          label: 'deshacer',
+          onClick: () => { day.slots.splice(si, 0, quitado); save(); render(); toast('Restaurado'); }
+        });
+      }
+    }));
     row.appendChild(tools);
+    if (fuera) row.appendChild(el('span', { class: 'tiny amber', style: { gridColumn: '1 / -1', marginTop: '-2px' }, text: 'sugerido para este tipo: ' + band[0] + '–' + band[1] + ' reps' }));
+    if (slot.flagged === 'sin-equipo') {
+      row.appendChild(el('div', { class: 'row', style: { gridColumn: '1 / -1' } },
+        el('span', { class: 'pill', style: { borderColor: 'var(--amber)', color: 'var(--amber)' }, text: 'no tienes el material: ' + CE.requiredEquipment(ex).filter((t) => t !== 'peso_corporal').map((t) => ((CE.EQUIPMENT.filter((e) => e.id === t)[0] || {}).label || t).toLowerCase()).join(' o ') })
+      ));
+    }
     return row;
   }
 
