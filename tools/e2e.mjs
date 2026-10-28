@@ -71,6 +71,12 @@ const repsPrefill = await ev("document.querySelector('.ex .set-row input[inputmo
 const plates = await ev("(function(){var p=document.querySelector('.plates');return p?p.textContent:''})()");
 check('muestra los discos por lado en barra', /por lado|no se puede montar/.test(plates), plates.slice(0, 80));
 
+await ev("(function(){var b=document.querySelector('.ex .ex-title b'); b.click(); return 1})()");
+await sleep(500);
+check('tocar el nombre abre las alternativas', (await ev("document.getElementById('sheet').textContent.indexOf('Alternativas que trabajan lo mismo') >= 0")) === true);
+await ev("[...document.querySelectorAll('.sheet-actions button')].find(function(b){return b.textContent==='Cerrar'}).click()");
+await sleep(300);
+
 check('la serie llega precargada con lo de la última vez', Number(repsPrefill) > 0, repsPrefill);
 
 check('la cabecera muestra la semana', /Semana/i.test(await ev("document.getElementById('weekChip').textContent")), await ev("document.getElementById('weekChip').textContent"));

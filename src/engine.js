@@ -170,6 +170,28 @@
     cable_fly:       { name: 'Aperturas en polea',             pattern: 'fly',        equipment: 'polea',         primary: 'chest',      secondary: ['delt_front'],         incPct: 2.5, axial: 0, unilateral: false, rest: 75,  bwFactor: 0.12, step: 2.5, cue: 'Codos algo flexionados; junta sin choque, controla la vuelta.' },
     pec_deck:        { name: 'Pec deck (aperturas en máquina)', pattern: 'fly',       equipment: 'máquina',       primary: 'chest',      secondary: ['delt_front'],         incPct: 2.5, axial: 0, unilateral: false, rest: 75,  bwFactor: 0.25, step: 2.5, cue: 'Pecho apoyado; abre hasta sentir el estiramiento.' },
 
+    /* --- variantes añadidas --- */
+    bench_smith:     { name: 'Press de banca en Smith',        pattern: 'push_h', equipment: 'smith',      primary: 'chest', secondary: ['triceps', 'delt_front'], incPct: 2.5, axial: 0, unilateral: false, rest: 150, bwFactor: 0.38, step: 2.5, cue: 'La barra guiada fija la trayectoria; pies firmes.' },
+    chest_machine:   { name: 'Press de pecho en máquina',      pattern: 'push_h', equipment: 'máquina',    primary: 'chest', secondary: ['triceps', 'delt_front'], incPct: 2.5, axial: 0, unilateral: false, rest: 120, bwFactor: 0.40, step: 2.5, cue: 'Ajusta el asiento a la altura del pecho.' },
+    incline_bar:     { name: 'Press inclinado con barra',      pattern: 'push_i', equipment: 'barra',      primary: 'chest', secondary: ['triceps', 'delt_front'], incPct: 2.5, axial: 0, unilateral: false, rest: 150, bwFactor: 0.32, step: 1.25, cue: 'Banco a 30°; barra a la clavícula.' },
+    incline_smith:   { name: 'Press inclinado en Smith',       pattern: 'push_i', equipment: 'smith',      primary: 'chest', secondary: ['triceps', 'delt_front'], incPct: 2.5, axial: 0, unilateral: false, rest: 150, bwFactor: 0.34, step: 2.5, cue: 'Banco a 30° bajo la barra guiada.' },
+    ohp_smith:       { name: 'Press militar en Smith',         pattern: 'push_v', equipment: 'smith',      primary: 'delt_front', secondary: ['triceps'], incPct: 2.5, axial: 1, unilateral: false, rest: 150, bwFactor: 0.28, step: 2.5, cue: 'De pie o sentado, barra a la barbilla.' },
+    pulldown_neutral:{ name: 'Jalón agarre neutro',            pattern: 'pull_v', equipment: 'polea',      primary: 'back', secondary: ['biceps'], incPct: 2.5, axial: 0, unilateral: false, rest: 120, bwFactor: 0.35, step: 2.5, cue: 'Codos hacia las costillas, sin balanceo.' },
+    pullover_cable:  { name: 'Pullover en polea',              pattern: 'pull_v', equipment: 'polea',      primary: 'back', secondary: ['triceps'], incPct: 2.5, axial: 0, unilateral: false, rest: 90,  bwFactor: 0.18, step: 2.5, cue: 'Brazos casi rectos; lleva el cable a la cadera.' },
+    row_tbar:        { name: 'Remo en T',                      pattern: 'pull_h', equipment: 'barra',      primary: 'back', secondary: ['biceps', 'delt_rear'], incPct: 2.5, axial: 1, unilateral: false, rest: 150, bwFactor: 0.35, step: 2.5, cue: 'Tronco a 45°, tira con los codos.' },
+    row_cable:       { name: 'Remo sentado en polea',          pattern: 'pull_h', equipment: 'polea',      primary: 'back', secondary: ['biceps'], incPct: 2.5, axial: 0, unilateral: false, rest: 120, bwFactor: 0.35, step: 2.5, cue: 'Sin echar el tronco atrás; lleva el ombligo dentro.' },
+    lateral_machine: { name: 'Elevación lateral en máquina',   pattern: 'lateral', equipment: 'máquina',   primary: 'delt_side', secondary: [], incPct: 2.5, axial: 0, unilateral: false, rest: 60, bwFactor: 0.10, step: 2.5, cue: 'Codos guiados; sube hasta la altura del hombro.' },
+    preacher_curl:   { name: 'Curl predicador',                pattern: 'biceps', equipment: 'mancuernas', primary: 'biceps', secondary: [], incPct: 2.5, axial: 0, unilateral: false, rest: 75, bwFactor: 0.10, step: 2, cue: 'Brazo apoyado; baja controlado hasta estirar.' },
+    incline_curl:    { name: 'Curl inclinado con mancuernas',  pattern: 'biceps', equipment: 'mancuernas', primary: 'biceps', secondary: [], incPct: 2.5, axial: 0, unilateral: false, rest: 75, bwFactor: 0.09, step: 2, cue: 'Banco a 60°; el estiramiento es el punto.' },
+    french_press:    { name: 'Press francés',                  pattern: 'triceps', equipment: 'mancuernas', primary: 'triceps', secondary: [], incPct: 2.5, axial: 0, unilateral: false, rest: 90, bwFactor: 0.10, step: 2, cue: 'Codos apuntando al techo, sin abrirlos.' },
+    skull_crusher:   { name: 'Extensión tumbado con barra',    pattern: 'triceps', equipment: 'barra',    primary: 'triceps', secondary: [], incPct: 2.5, axial: 0, unilateral: false, rest: 90, bwFactor: 0.12, step: 1.25, cue: 'Barra a la frente; codos quietos.' },
+    goblet_squat:    { name: 'Sentadilla goblet',              pattern: 'squat', equipment: 'mancuernas',  primary: 'quad', secondary: ['glute'], incPct: 5, axial: 1, unilateral: false, rest: 120, bwFactor: 0.30, step: 2, cue: 'Mancuerna al pecho; baja entre los pies.' },
+    squat_smith:     { name: 'Sentadilla en Smith',            pattern: 'squat', equipment: 'smith',       primary: 'quad', secondary: ['glute'], incPct: 5, axial: 1, unilateral: false, rest: 150, bwFactor: 0.45, step: 2.5, cue: 'Pies algo adelantados; baja controlado.' },
+    walking_lunge:   { name: 'Zancadas con mancuernas',        pattern: 'lunge', equipment: 'mancuernas',  primary: 'quad', secondary: ['glute', 'ham'], incPct: 5, axial: 1, unilateral: true, rest: 105, bwFactor: 0.20, step: 2, cue: 'Paso largo; rodilla a ras del suelo.' },
+    single_rdl:      { name: 'Peso muerto rumano a una pierna', pattern: 'hinge', equipment: 'mancuernas', primary: 'ham', secondary: ['glute'], incPct: 5, axial: 1, unilateral: true, rest: 105, bwFactor: 0.12, step: 2, cue: 'Cadera atrás; la espalda no cambia.' },
+    hip_thrust_mach: { name: 'Hip thrust en máquina',          pattern: 'hip_thrust', equipment: 'máquina', primary: 'glute', secondary: ['ham'], incPct: 5, axial: 0, unilateral: false, rest: 150, bwFactor: 0.90, step: 5, cue: 'Apoya la espalda y empuja con el talón.' },
+    calf_press:      { name: 'Pantorrilla en prensa',          pattern: 'calf', equipment: 'máquina',     primary: 'calf', secondary: [], incPct: 5, axial: 0, unilateral: false, rest: 60, bwFactor: 0.25, step: 5, cue: 'Rango completo; pausa arriba y abajo.' },
+
     /* --- core --- */
     ab_wheel:        { name: 'Rueda abdominal',           pattern: 'core',       equipment: 'accesorio', primary: 'core',     secondary: [],                     incPct: 5,    axial: 0, unilateral: false, rest: 60,  bwFactor: 0.00, step: 2.5, cue: 'Costillas cerradas; no dejes caer la lumbar.' },
     plank:           { name: 'Plancha',                   pattern: 'core',       equipment: 'peso corporal', primary: 'core', secondary: [],                    incPct: 5,    axial: 0, unilateral: false, rest: 60,  bwFactor: 0.00, step: 2.5, cue: 'Series por tiempo, no por repeticiones.' }
@@ -304,6 +326,8 @@
         if ((e.secondary || []).indexOf(src.primary) >= 0) { score += 1; }
         if ((COMPOUND_PATTERNS.indexOf(e.pattern) >= 0) === srcCompound) { score += 1; why.push(srcCompound ? 'también compuesto' : 'también aislamiento'); }
         if (prefs[id] === 'like') { score += 2; why.push('te gusta'); }
+        if (e.equipment === src.equipment) score += 1;
+        if (e.equipment === 'peso corporal' && src.equipment !== 'peso corporal') score -= 1;
         if (e.primary !== src.primary) score -= 3;
         return { id: id, name: e.name, score: score, why: why, primary: e.primary };
       })

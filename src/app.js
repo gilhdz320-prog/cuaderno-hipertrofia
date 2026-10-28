@@ -827,7 +827,11 @@
     /* cabecera */
     const head = el('div', { class: 'ex-head' });
     const title = el('div', { class: 'ex-title' });
-    title.appendChild(el('b', {}, ex.name, slot.optional ? el('span', { class: 'pill opt', style: { marginLeft: '8px' }, text: 'opcional' }) : null));
+    title.appendChild(el('b', {
+      style: { cursor: 'pointer' }, title: 'Toca para cambiar por otro ejercicio',
+      onclick: () => openSwap(day, slot, idx)
+    }, ex.name, slot.optional ? el('span', { class: 'pill opt', style: { marginLeft: '8px' }, text: 'opcional' }) : null,
+      el('span', { class: 'tiny muted', style: { marginLeft: '6px', fontWeight: '400' }, text: '⇄' })));
     const nSets = adjustedSets(slot, L);
     title.appendChild(el('span', { class: 'spec', text: nSets + ' × ' + slot.reps[0] + '–' + slot.reps[1] + ' · RIR ' + slot.rir + ' · ' + fmtRest(slot.rest || ex.rest) + ' descanso' }));
     if (nSets !== slot.sets) title.appendChild(el('span', { class: 'pill', text: 'hoy ' + nSets + ' series' }));
@@ -1427,6 +1431,23 @@
     return card;
   }
 
+  function openSplitSheet() {
+    const body = el('div', { class: 'stack' });
+    body.appendChild(el('p', { class: 'hint', text: 'Cómo se reparten los músculos entre tus días. Al elegir, el programa se reconstruye con los días que correspondan.' }));
+    Object.keys(CE.SPLITS).forEach(function (id) {
+      const sp = CE.SPLITS[id];
+      const cur = (S.block.split || 'auto') === id;
+      body.appendChild(el('div', { class: 'row between', style: { padding: '9px 0', borderBottom: '1px solid var(--line)' } },
+        el('div', {}, el('b', { text: sp.label }), el('div', { class: 'tiny muted', text: sp.hint })),
+        el('button', {
+          class: 'btn sm' + (cur ? ' primary' : ''), text: cur ? 'actual' : 'elegir',
+          onclick: () => { closeSheet(); applySplit(id); }
+        })
+      ));
+    });
+    openSheet('Reparto de la semana', 'Elige cómo dividir el entrenamiento', body, [{ label: 'Cerrar', ghost: true, onClick: closeSheet }]);
+  }
+
   function applySplit(id) {
     S.block.split = id;
     S.program = CE.buildProgram({ n: S.block.freq, split: id, exMap: EX, loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps, experience: S.athlete.experience, priority: S.block.priority || [] });
@@ -1550,6 +1571,7 @@
     head.appendChild(hl);
     head.appendChild(el('div', { class: 'row tight' },
       el('button', { class: 'btn sm', text: 'Optimizar reparto', onclick: optimize }),
+      el('button', { class: 'btn sm', text: 'Reparto: ' + (CE.SPLITS[S.block.split] ? CE.SPLITS[S.block.split].label : 'Automático'), onclick: openSplitSheet }),
       el('button', { class: 'btn sm ghost', text: 'Ajustes', onclick: () => go('ajustes') })
     ));
     wrap.appendChild(head);
