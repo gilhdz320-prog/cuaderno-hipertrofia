@@ -6747,9 +6747,16 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
       } catch (e) { /* hash no válido */ }
     }
 
-    applyDeviceProfile();
+    const recordado = applyDeviceProfile();
     save(true);
     snapshotToday();
+    /* cuenta compartida y este móvil aún no sabe de quién es: pregunta una vez */
+    if (!recordado && !deviceProfile() && Object.keys(DB.profiles).length > 1) {
+      setTimeout(function () {
+        openProfiles();
+        toast('¿Quién usa este móvil? Elige tu perfil y ya no volverá a preguntar');
+      }, 700);
+    }
     const params = new URLSearchParams(location.search);
     if (!S.onboarded && params.get('demo') !== '1' && params.get('selftest') !== '1') openOnboarding();
     if (new URLSearchParams(location.search).get('selftest') === '1') return runSelfTest();
