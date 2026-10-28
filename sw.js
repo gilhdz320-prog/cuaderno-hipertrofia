@@ -1,7 +1,7 @@
 /* Service worker del cuaderno.
    La versión de la caché la inyecta build.mjs con un hash del HTML:
    cada build invalida la anterior y no te quedas con una versión vieja. */
-const CACHE = 'cuaderno-3e4beda448';
+const CACHE = 'cuaderno-6e8776e4df';
 const ASSETS = [
   './',
   './index.html',

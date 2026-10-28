@@ -2750,6 +2750,7 @@
       })
     ));
     card.appendChild(el('p', { class: 'tiny muted', style: { marginTop: '6px' }, text: 'Las cargas son una estimación a partir de tu peso corporal y tu experiencia (banca ≈ 0,40 × peso; hip thrust ≈ 1,10 ×; lateral ≈ 0,05 ×). En cuanto registras una serie, manda tu dato.' }));
+    card.appendChild(el('p', { class: 'tiny muted', text: 'La experiencia también fija el volumen objetivo: principiante ×0,85, intermedio ×1, avanzado ×1,15. Al cambiarla, pulsa «Reconstruir desde la plantilla» para aplicar el nuevo reparto de series.' }));
 
     const otros = profileList().filter(function (p) { return p.id !== S.id; });
     if (otros.length) {
