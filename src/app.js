@@ -559,6 +559,7 @@
       wrap.appendChild(el('div', { class: 'row between', style: { marginTop: '-4px', gap: '8px', flexWrap: 'wrap' } },
         el('span', { class: 'tiny muted', html: 'Método: <b>' + sp.label + '</b> · ' + S.program.days.length + ' días' }),
         el('div', { class: 'row tight' },
+          el('button', { class: 'btn sm', text: 'Perfil: ' + (S.name || 'Atleta'), title: 'Cambiar de perfil', onclick: openProfiles }),
           el('button', { class: 'btn sm', text: 'Cambiar método', onclick: openSplitSheet }),
           day ? el('button', { class: 'btn sm ghost', text: 'Modo entrenamiento', onclick: () => setTrainMode(true) }) : null
         )

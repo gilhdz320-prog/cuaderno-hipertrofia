@@ -601,9 +601,9 @@
   function fullBodyTemplate(n, priority) {
     const arms = needsArmSlots(priority);
     const A = sess('fb_a', 'fb_a', 1, 'Full body A', 'Cadera, tirón vertical y press plano', [
-      slot('hip_thrust', 3, [8, 10], 2), slot('lat_pulldown', 3, [8, 10], 1.5),
+      slot('hip_thrust', 3, [8, 10], 2), slot('kickback', 3, [15, 20], 1), slot('lat_pulldown', 3, [8, 10], 1.5),
       slot('bench', 3, [6, 8], 2), slot('leg_curl_seated', 2, [10, 12], 1),
-      slot('lateral_raise', 2, [12, 15], 1),
+      slot('lateral_raise', 2, [12, 15], 1), slot('abduction', 2, [15, 20], 1),
       arms ? slot('biceps_curl', 2, [10, 12], 1, { superset: 'arms_a' }) : null,
       arms ? slot('triceps_pushdown', 2, [10, 12], 1, { superset: 'arms_a' }) : null,
       slot('calf_standing', 2, [10, 12], 1)
@@ -611,12 +611,12 @@
     const B = sess('fb_b', 'fb_b', 3, 'Full body B', 'Bisagra, tirón horizontal y press vertical', [
       slot('rdl', 3, [8, 10], 2), slot('row_barbell', 3, [8, 10], 1.5),
       slot('ohp', 3, [8, 10], 2), slot('bulgarian', 3, [8, 10], 2),
-      slot('lateral_raise', 3, [12, 15], 1),
+      slot('lateral_raise', 3, [12, 15], 1), slot('face_pull', 2, [15, 20], 1),
       arms ? slot('biceps_curl', 2, [10, 12], 1, { superset: 'arms_b' }) : null,
       arms ? slot('triceps_pushdown', 2, [10, 12], 1, { superset: 'arms_b' }) : null
     ]);
     const C = sess('fb_c', 'fb_c', 5, 'Full body C', 'Sentadilla, tirón unilateral y press inclinado', [
-      slot('hack', 3, [10, 12], 1.5), slot('row_cable_uni', 3, [10, 12], 1),
+      slot('hack', 3, [10, 12], 1.5), slot('hip_thrust', 3, [8, 10], 2), slot('row_cable_uni', 3, [10, 12], 1), slot('leg_ext', 2, [12, 15], 1),
       slot('incline_db', 3, [8, 10], 2), slot('kickback', 2, [15, 20], 1),
       slot('face_pull', 2, [15, 20], 1),
       (arms || needsShoulderSlots(priority)) ? slot('lateral_cable', 2, [12, 15], 1) : null,
@@ -913,7 +913,13 @@
     return prio + compound + s.sets;
   }
   function addSet(day, exMap, moves) {
-    const cand = day.slots.filter(s => !s.optional && s.sets < 5)
+    /* Reparte en más ejercicios en vez de apilar series: máximo 4 en un
+       compuesto y 3 en un aislamiento. Asi la sesion se hace variada. */
+    const maxFor = function (s) {
+      const e = exOf(s.ex, exMap);
+      return COMPOUND_PATTERNS.indexOf(e.pattern) >= 0 ? 4 : 3;
+    };
+    const cand = day.slots.filter(s => !s.optional && s.sets < maxFor(s))
       .sort((a, b) => weight(b, exMap) - weight(a, exMap))[0];
     if (!cand) return false;
     cand.sets += 1;
@@ -973,14 +979,19 @@
   function findSlotForMuscle(program, muscleId, exMap, opts) {
     opts = opts || {};
     const bump = opts.bump || 0;
-    const limit = opts.remove ? 2 : 5;
+    const capForSlot = function (s) {
+      const e = exOf(s.ex, exMap);
+      return COMPOUND_PATTERNS.indexOf(e.pattern) >= 0 ? 4 : 3;
+    };
+    const limit = opts.remove ? 2 : 4;
     const candidates = [];
     program.days.forEach(day => {
       if (countSets({ days: [day] }) >= capFor(program.n, bump) && !opts.remove) return;
       day.slots.forEach(s => {
         if (s.optional) return;
         const e = exOf(s.ex, exMap);
-        if (opts.remove ? (s.sets <= limit) : (s.sets >= limit)) return;
+        const lim = opts.remove ? 2 : capForSlot(s);
+        if (opts.remove ? (s.sets <= lim) : (s.sets >= lim)) return;
         if (e.primary === muscleId) candidates.push({ day: day, slot: s });
         else if ((e.secondary || []).includes(muscleId) && !opts.remove) candidates.push({ day: day, slot: s, secondary: true });
       });
