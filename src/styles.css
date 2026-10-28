@@ -631,3 +631,13 @@ body.train-mode .set-row input { min-height: 46px; font-size: 1rem; }
 body.train-mode .set-row .check { width: 52px; height: 46px; font-size: 1.1rem; }
 body.train-mode .ex + .ex { margin-top: 8px; }
 body.train-mode .ex-body { padding: 10px 14px 12px; }
+
+
+/* discos y aproximación bajo la cabecera del ejercicio */
+.plates {
+  display: flex; flex-wrap: wrap; gap: 6px 16px;
+  padding: 8px 16px; border-bottom: 1px solid var(--line);
+  font-size: .72rem; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.plates span { white-space: nowrap; }
+body.train-mode .plates { padding: 6px 14px; font-size: .7rem; }

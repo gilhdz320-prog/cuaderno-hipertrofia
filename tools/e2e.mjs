@@ -62,6 +62,9 @@ check('el alta guiada se puede saltar', !(await ev("!document.getElementById('mo
 check('arranca con la sesión de hoy', await ev("!!document.querySelector('#view h1')"), await ev("document.querySelector('#view h1') && document.querySelector('#view h1').textContent"));
 check('hay tarjetas de ejercicio', (await ev("document.querySelectorAll('.ex').length")) > 0, await ev("document.querySelectorAll('.ex').length"));
 const repsPrefill = await ev("document.querySelector('.ex .set-row input[inputmode=numeric]').value");
+const plates = await ev("(function(){var p=document.querySelector('.plates');return p?p.textContent:''})()");
+check('muestra los discos por lado en barra', /por lado|no se puede montar/.test(plates), plates.slice(0, 80));
+
 check('la serie llega precargada con lo de la última vez', Number(repsPrefill) > 0, repsPrefill);
 
 check('la cabecera muestra la semana', /Semana/i.test(await ev("document.getElementById('weekChip').textContent")), await ev("document.getElementById('weekChip').textContent"));

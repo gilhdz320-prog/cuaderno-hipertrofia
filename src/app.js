@@ -774,6 +774,22 @@
     if (slot.flagged === 'sin-equipo') {
       title.appendChild(el('span', { class: 'pill', style: { borderColor: 'var(--amber)', color: 'var(--amber)' }, text: 'necesita ' + CE.requiredEquipment(ex).filter((t) => t !== 'peso_corporal').map((t) => ((CE.EQUIPMENT.filter((e) => e.id === t)[0] || {}).label || t).toLowerCase()).join(' o ') }));
     }
+    if (CE.isBarbellExercise(ex)) {
+      const w = entry.load || S.loads[slot.ex] || 0;
+      const ramp = CE.warmupRamp(w, { step: ex.step || 2.5 });
+      const barKg = ex.equipment === 'trap bar' ? 25 : 20;
+      const pl = CE.platesFor(w, barKg);
+      const line = el('div', { class: 'plates' });
+      if (pl.exact) {
+        line.appendChild(el('span', { text: 'Barra ' + barKg + ' kg · por lado: ' + CE.platesLabel(w, barKg) }));
+      } else {
+        const near = CE.nearestLoadable(w, barKg);
+        line.appendChild(el('span', { class: 'amber', text: 'Barra ' + barKg + ' kg · ' + kg(w) + ' no se puede montar: usa ' + kg(near.below) + ' o ' + kg(near.above) }));
+      }
+      if (ramp.length) line.appendChild(el('span', { text: 'Aproximación: ' + ramp.map(function (r) { return kg(r.load) + '×' + r.reps; }).join(' · ') }));
+      card.appendChild(line);
+    }
+
     if (last && !trainMode()) {
       const sets = last.entry.sets.filter(s => s && s.reps);
       const maxLoad = Math.max.apply(null, sets.map(s => s.load || 0).concat([0]));

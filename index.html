@@ -649,6 +649,16 @@ body.train-mode .set-row .check { width: 52px; height: 46px; font-size: 1.1rem; 
 body.train-mode .ex + .ex { margin-top: 8px; }
 body.train-mode .ex-body { padding: 10px 14px 12px; }
 
+
+/* discos y aproximación bajo la cabecera del ejercicio */
+.plates {
+  display: flex; flex-wrap: wrap; gap: 6px 16px;
+  padding: 8px 16px; border-bottom: 1px solid var(--line);
+  font-size: .72rem; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.plates span { white-space: nowrap; }
+body.train-mode .plates { padding: 6px 14px; font-size: .7rem; }
+
 </style>
 </head>
 <body>
@@ -1634,7 +1644,7 @@ window.CUADERNO_CONFIG = {
     const repsMin = (slotOrEx.reps && slotOrEx.reps[0]) || null;
     const repsMax = (slotOrEx.reps && slotOrEx.reps[1]) || null;
     const targetRir = typeof slotOrEx.rir === 'number' ? slotOrEx.rir : 2;
-    const step = e.step || 2.5;
+    const step = loadStep(e);
     const last = lastEntryFor(logs, exId);
     const empty = { action: 'calibrar', nextLoad: base, pct: 0, reason: 'Sin datos: es la primera vez. Empieza con la carga de calibración y deja 3 reps en reserva.', condition: 'Semana 1: calibra.', history: { up: 0, down: 0, sessions: 0 } };
 
@@ -1920,6 +1930,62 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
   }
 
   /* ------------------------------------------------------------------ *
+   * 8.d.2 Discos y aproximación (para barra)
+   * ------------------------------------------------------------------ */
+  const BAR_KG = 20;
+  const PLATES = [25, 20, 15, 10, 5, 2.5, 1.25];
+
+  function isBarbellExercise(e) {
+    const eq = (e && e.equipment) || '';
+    return eq === 'barra' || eq === 'trap bar' || eq === 'smith';
+  }
+
+  function loadStep(e) {
+    if (isBarbellExercise(e)) return 2.5;
+    return (e && e.step) || 2.5;
+  }
+
+  function nearestLoadable(load, bar) {
+    bar = bar == null ? BAR_KG : bar;
+    const below = bar + Math.floor(((Number(load) || 0) - bar) / 2.5) * 2.5;
+    return { below: Math.round(below * 100) / 100, above: Math.round((below + 2.5) * 100) / 100 };
+  }
+
+  function platesFor(load, bar) {
+    bar = bar == null ? BAR_KG : bar;
+    let perSide = Math.max(0, (Number(load) || 0) - bar) / 2;
+    const out = [];
+    PLATES.forEach(function (p) {
+      const n = Math.floor(perSide / p + 1e-9);
+      if (n > 0) { out.push({ plate: p, n: n }); perSide -= n * p; }
+    });
+    perSide = Math.round(perSide * 100) / 100;
+    return { bar: bar, plates: out, remainder: perSide, exact: Math.abs(perSide) < 0.01 };
+  }
+
+  function platesLabel(load, bar) {
+    const r = platesFor(load, bar);
+    if (!r.plates.length) return 'solo la barra';
+    const txt = r.plates.map(function (p) { return p.n > 1 ? p.n + '×' + p.plate : String(p.plate); }).join(' + ');
+    return txt + (r.exact ? '' : ' (+' + r.remainder + ' sin disco)');
+  }
+
+  /* Rampa de calentamiento: 40 %, 60 % y 80 % del peso de trabajo. */
+  function warmupRamp(load, opts) {
+    opts = opts || {};
+    const step = opts.step || 2.5;
+    const bar = opts.bar == null ? BAR_KG : opts.bar;
+    const out = [];
+    /* si apenas hay discos que poner, no hay nada que aproximar */
+    if ((Number(load) || 0) < bar * 1.6) return out;
+    [[0.4, 5], [0.6, 3], [0.8, 2]].forEach(function (pair) {
+      const w = Math.max(bar, roundTo((Number(load) || 0) * pair[0], step));
+      if (w < load) out.push({ load: w, reps: pair[1], pct: Math.round(pair[0] * 100) });
+    });
+    return out;
+  }
+
+  /* ------------------------------------------------------------------ *
    * 8.e Resumen semanal
    * ------------------------------------------------------------------ */
   function bestE1rm(logs, exId, dates) {
@@ -2180,7 +2246,11 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     const out = {};
     Object.keys(EX_POOL).forEach(id => {
       const e = EX_POOL[id];
-      out[id] = e.bwFactor ? roundTo(e.bwFactor * bw * factor, e.step || 2.5) : 0;
+      if (!e.bwFactor) { out[id] = 0; return; }
+      const step = loadStep(e);
+      let v = roundTo(e.bwFactor * bw * factor, step);
+      if (isBarbellExercise(e)) v = Math.max(e.equipment === 'trap bar' ? 25 : BAR_KG, v);
+      out[id] = v;
     });
     return out;
   }
@@ -2295,7 +2365,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     const logs = {};
     logs['2026-10-26'] = { entries: { bench: { sets: [{ reps: 8, load: 40, rir: 2 }, { reps: 8, load: 40, rir: 2 }, { reps: 8, load: 40, rir: 2 }] } } };
     const advUp = advise({ ex: 'bench', reps: [6, 8], rir: 2 }, logs, { bench: 40 }, exMap);
-    ok('progresión: sube al tocar el techo', advUp.action === 'subir' && advUp.nextLoad === 41.25, advUp.action + ' ' + advUp.nextLoad);
+    ok('progresión: sube al tocar el techo', advUp.action === 'subir' && advUp.nextLoad === 42.5, advUp.action + ' ' + advUp.nextLoad);
     const logs2 = { '2026-10-26': { entries: { bench: { sets: [{ reps: 4, load: 40, rir: 0 }] } } } };
     const advDown = advise({ ex: 'bench', reps: [6, 8], rir: 2 }, logs2, { bench: 40 }, exMap);
     ok('progresión: baja con RIR 0', advDown.action === 'bajar' && advDown.nextLoad === 37.5, advDown.action + ' ' + advDown.nextLoad);
@@ -2353,6 +2423,8 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     REPS_BAND: REPS_BAND, repsBandFor: repsBandFor, clampRepsFor: clampRepsFor, EXPERIENCE_FACTOR: EXPERIENCE_FACTOR,
     e1rm: e1rm, exerciseHistory: exerciseHistory, stagnation: stagnation, projectBlock: projectBlock,
     weekReport: weekReport, reportText: reportText, bestE1rm: bestE1rm,
+    platesFor: platesFor, platesLabel: platesLabel, warmupRamp: warmupRamp, isBarbellExercise: isBarbellExercise, BAR_KG: BAR_KG,
+    loadStep: loadStep, nearestLoadable: nearestLoadable,
     swapOptions: swapOptions, sessionRedundancy: sessionRedundancy, movementFamily: movementFamily,
     cycleInfo: cycleInfo, cycleAdjustment: cycleAdjustment, cyclePattern: cyclePattern, CYCLE_PHASE_LABEL: CYCLE_PHASE_LABEL, daysBetween: daysBetween,
     CARDIO_PROTOCOLS: CARDIO_PROTOCOLS, lowerDays: lowerDays, suggestCardioDay: suggestCardioDay, cardioWarnings: cardioWarnings, dayDistance: dayDistance,
@@ -3402,6 +3474,22 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     if (slot.flagged === 'sin-equipo') {
       title.appendChild(el('span', { class: 'pill', style: { borderColor: 'var(--amber)', color: 'var(--amber)' }, text: 'necesita ' + CE.requiredEquipment(ex).filter((t) => t !== 'peso_corporal').map((t) => ((CE.EQUIPMENT.filter((e) => e.id === t)[0] || {}).label || t).toLowerCase()).join(' o ') }));
     }
+    if (CE.isBarbellExercise(ex)) {
+      const w = entry.load || S.loads[slot.ex] || 0;
+      const ramp = CE.warmupRamp(w, { step: ex.step || 2.5 });
+      const barKg = ex.equipment === 'trap bar' ? 25 : 20;
+      const pl = CE.platesFor(w, barKg);
+      const line = el('div', { class: 'plates' });
+      if (pl.exact) {
+        line.appendChild(el('span', { text: 'Barra ' + barKg + ' kg · por lado: ' + CE.platesLabel(w, barKg) }));
+      } else {
+        const near = CE.nearestLoadable(w, barKg);
+        line.appendChild(el('span', { class: 'amber', text: 'Barra ' + barKg + ' kg · ' + kg(w) + ' no se puede montar: usa ' + kg(near.below) + ' o ' + kg(near.above) }));
+      }
+      if (ramp.length) line.appendChild(el('span', { text: 'Aproximación: ' + ramp.map(function (r) { return kg(r.load) + '×' + r.reps; }).join(' · ') }));
+      card.appendChild(line);
+    }
+
     if (last && !trainMode()) {
       const sets = last.entry.sets.filter(s => s && s.reps);
       const maxLoad = Math.max.apply(null, sets.map(s => s.load || 0).concat([0]));

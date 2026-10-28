@@ -59,7 +59,7 @@ test('progresión doble con las reglas del documento', () => {
   const ok = { '2026-10-26': { entries: { bench: { sets: [8, 8, 8].map(r => ({ reps: r, load: 40, rir: 2 })) } } } };
   const a = CE.advise({ ex: 'bench', reps: [6, 8], rir: 2 }, ok, { bench: 40 }, exMap);
   assert.equal(a.action, 'subir');
-  assert.equal(a.nextLoad, 41.25);
+  assert.equal(a.nextLoad, 42.5, 'en barra el salto mínimo son 2,5 kg');
   assert.match(a.condition, /sube/i);
 
   const fail = { '2026-10-26': { entries: { bench: { sets: [{ reps: 4, load: 40, rir: 0 }] } } } };
@@ -355,4 +355,22 @@ test('detector de estímulo duplicado por familia de movimiento', () => {
     { ex: 'row_barbell', sets: 3, reps: [8, 10], rir: 1.5 }
   ] };
   assert.equal(CE.sessionRedundancy(planos, ex).length, 0, 'jalón y remo son planos distintos');
+});
+
+test('calculadora de discos por lado', () => {
+  assert.deepEqual(CE.platesFor(100).plates.map((p) => [p.plate, p.n]), [[25, 1], [15, 1]]);
+  assert.equal(CE.platesFor(100).exact, true);
+  assert.deepEqual(CE.platesFor(72.5).plates.map((p) => [p.plate, p.n]), [[25, 1], [1.25, 1]]);
+  assert.deepEqual(CE.platesFor(60).plates.map((p) => [p.plate, p.n]), [[20, 1]]);
+  assert.equal(CE.platesFor(20).plates.length, 0, 'solo la barra');
+  assert.match(CE.platesLabel(100), /25 \+ 15/);
+});
+
+test('rampa de aproximación', () => {
+  const r = CE.warmupRamp(100);
+  assert.deepEqual(r.map((x) => x.load), [40, 60, 80]);
+  assert.deepEqual(r.map((x) => x.reps), [5, 3, 2]);
+  assert.ok(CE.warmupRamp(60).every((x) => x.load < 60));
+  assert.equal(CE.isBarbellExercise({ equipment: 'barra' }), true);
+  assert.equal(CE.isBarbellExercise({ equipment: 'polea' }), false);
 });
