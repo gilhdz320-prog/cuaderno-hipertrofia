@@ -704,11 +704,33 @@
         class: 'btn sm primary', text: 'Me está bajando',
         onclick: () => markPeriodStart(date)
       }));
+      card.appendChild(btns);
     } else {
-      btns.appendChild(el('span', { class: 'chip red', text: 'Sangrado · día ' + (CE.daysBetween(lastPeriod.start, date) + 1) }));
+      const dia = CE.daysBetween(lastPeriod.start, date) + 1;
+      btns.appendChild(el('span', { class: 'chip red', text: 'Sangrado · día ' + dia }));
       btns.appendChild(el('button', { class: 'btn sm', text: 'Terminó', onclick: () => markPeriodEnd(date) }));
+      card.appendChild(btns);
+
+      /* registro diario: ánimo, fatiga, dolor y fuerza */
+      const grid = el('div', { class: 'grid two', style: { marginTop: '10px', gap: '8px' } });
+      const mkSelect = function (label, key, options) {
+        const sel = el('select', { 'aria-label': label });
+        options.forEach(function (o) {
+          sel.appendChild(el('option', { value: o[0], text: o[1], selected: String(check[key]) === String(o[0]) ? true : null }));
+        });
+        sel.addEventListener('change', function () {
+          const patch = {};
+          patch[key] = num(sel.value);
+          setCycleCheck(date, L, patch);
+        });
+        return el('label', { class: 'fld' }, label, sel);
+      };
+      grid.appendChild(mkSelect('Ánimo', 'mood', [[3, '3 · normal'], [1, '1 · muy bajo'], [2, '2 · bajo'], [4, '4 · bien'], [5, '5 · muy bien']]));
+      grid.appendChild(mkSelect('Fatiga', 'fatigue', [[2, '2 · poca'], [1, '1 · ninguna'], [3, '3 · moderada'], [4, '4 · mucha'], [5, '5 · agotada']]));
+      grid.appendChild(mkSelect('Dolor', 'pain', [[0, '0 · sin dolor'], [1, '1 · leve'], [2, '2 · molesto'], [3, '3 · limita algo'], [4, '4 · limita bastante'], [5, '5 · no puedo']]));
+      grid.appendChild(mkSelect('Fuerza hoy', 'strength', [[0, 'Normal'], [1, 'Algo baja'], [2, 'Muy baja']]));
+      card.appendChild(grid);
     }
-    card.appendChild(btns);
 
     if (info.day <= S.cycle.periodLength + 2 || L.cycle) {
       card.appendChild(el('p', { class: 'hint', style: { margin: '8px 0 6px' }, text: '¿Cómo va la fuerza hoy? Con esto se ajusta la sesión, no el programa.' }));
@@ -2772,10 +2794,11 @@
       const last = el('input', { type: 'date', value: c.lastStart || '' });
       const len = el('input', { type: 'number', min: '21', max: '45', value: c.cycleLength || 28 });
       const period = el('input', { type: 'number', min: '2', max: '10', value: c.periodLength || 5 });
+      card.appendChild(el('p', { class: 'tiny muted', style: { marginTop: '4px' }, text: 'Cuenta desde el primer manchado hasta que desaparece. Con registros, la app usa tu media en vez de este número.' }));
       card.appendChild(el('div', { class: 'grid three', style: { marginTop: '10px' } },
         el('label', { class: 'fld' }, 'Último periodo (primer día)', last),
         el('label', { class: 'fld' }, 'Duración del ciclo', len),
-        el('label', { class: 'fld' }, 'Días de sangrado', period)
+        el('label', { class: 'fld' }, 'Duración habitual (días)', period)
       ));
       card.appendChild(el('div', { class: 'row', style: { marginTop: '8px' } },
         el('button', {

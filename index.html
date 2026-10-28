@@ -1823,7 +1823,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
       day: day, phase: phase, cycleLength: len, periodLength: period,
       nextStart: nextStart, daysToNext: Math.max(0, daysBetween(dateISO, nextStart)),
       average: avg,
-      bleeding: !!(active && !active.end && daysBetween(active.start, dateISO) >= 0 && daysBetween(active.start, dateISO) < len)
+      bleeding: !!(active && !active.end && daysBetween(active.start, dateISO) >= 0 && daysBetween(active.start, dateISO) < period)
     };
   }
 
@@ -1841,7 +1841,13 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
       if (check.strength >= 2) { loadFactor = Math.min(loadFactor, 0.92); setDelta -= 1; rirDelta += 0.5; reasons.push('fuerza muy baja'); }
       else if (check.strength === 1) { loadFactor = Math.min(loadFactor, 0.95); reasons.push('fuerza algo baja'); }
     }
-    if (check.pain) { setDelta -= 1; reasons.push('dolor o malestar'); }
+    const pain = typeof check.pain === 'number' ? check.pain : (check.pain ? 3 : 0);
+    if (pain >= 4) { setDelta -= 2; loadFactor = Math.min(loadFactor, 0.95); reasons.push('dolor ' + pain + '/5'); }
+    else if (pain >= 2) { setDelta -= 1; reasons.push('dolor ' + pain + '/5'); }
+    if (typeof check.fatigue === 'number') {
+      if (check.fatigue >= 4) { setDelta -= 1; loadFactor = Math.min(loadFactor, 0.95); reasons.push('fatiga ' + check.fatigue + '/5'); }
+      else if (check.fatigue === 3) { reasons.push('fatiga moderada'); }
+    }
     if (check.sleep === false) { setDelta -= 1; reasons.push('mal descanso'); }
     if (readiness && typeof readiness.score === 'number') {
       if (readiness.score < 40) { loadFactor = Math.min(loadFactor, 0.9); setDelta = Math.min(setDelta, -1); reasons.push('preparación roja'); }
@@ -3473,11 +3479,33 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
         class: 'btn sm primary', text: 'Me está bajando',
         onclick: () => markPeriodStart(date)
       }));
+      card.appendChild(btns);
     } else {
-      btns.appendChild(el('span', { class: 'chip red', text: 'Sangrado · día ' + (CE.daysBetween(lastPeriod.start, date) + 1) }));
+      const dia = CE.daysBetween(lastPeriod.start, date) + 1;
+      btns.appendChild(el('span', { class: 'chip red', text: 'Sangrado · día ' + dia }));
       btns.appendChild(el('button', { class: 'btn sm', text: 'Terminó', onclick: () => markPeriodEnd(date) }));
+      card.appendChild(btns);
+
+      /* registro diario: ánimo, fatiga, dolor y fuerza */
+      const grid = el('div', { class: 'grid two', style: { marginTop: '10px', gap: '8px' } });
+      const mkSelect = function (label, key, options) {
+        const sel = el('select', { 'aria-label': label });
+        options.forEach(function (o) {
+          sel.appendChild(el('option', { value: o[0], text: o[1], selected: String(check[key]) === String(o[0]) ? true : null }));
+        });
+        sel.addEventListener('change', function () {
+          const patch = {};
+          patch[key] = num(sel.value);
+          setCycleCheck(date, L, patch);
+        });
+        return el('label', { class: 'fld' }, label, sel);
+      };
+      grid.appendChild(mkSelect('Ánimo', 'mood', [[3, '3 · normal'], [1, '1 · muy bajo'], [2, '2 · bajo'], [4, '4 · bien'], [5, '5 · muy bien']]));
+      grid.appendChild(mkSelect('Fatiga', 'fatigue', [[2, '2 · poca'], [1, '1 · ninguna'], [3, '3 · moderada'], [4, '4 · mucha'], [5, '5 · agotada']]));
+      grid.appendChild(mkSelect('Dolor', 'pain', [[0, '0 · sin dolor'], [1, '1 · leve'], [2, '2 · molesto'], [3, '3 · limita algo'], [4, '4 · limita bastante'], [5, '5 · no puedo']]));
+      grid.appendChild(mkSelect('Fuerza hoy', 'strength', [[0, 'Normal'], [1, 'Algo baja'], [2, 'Muy baja']]));
+      card.appendChild(grid);
     }
-    card.appendChild(btns);
 
     if (info.day <= S.cycle.periodLength + 2 || L.cycle) {
       card.appendChild(el('p', { class: 'hint', style: { margin: '8px 0 6px' }, text: '¿Cómo va la fuerza hoy? Con esto se ajusta la sesión, no el programa.' }));
@@ -5541,10 +5569,11 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
       const last = el('input', { type: 'date', value: c.lastStart || '' });
       const len = el('input', { type: 'number', min: '21', max: '45', value: c.cycleLength || 28 });
       const period = el('input', { type: 'number', min: '2', max: '10', value: c.periodLength || 5 });
+      card.appendChild(el('p', { class: 'tiny muted', style: { marginTop: '4px' }, text: 'Cuenta desde el primer manchado hasta que desaparece. Con registros, la app usa tu media en vez de este número.' }));
       card.appendChild(el('div', { class: 'grid three', style: { marginTop: '10px' } },
         el('label', { class: 'fld' }, 'Último periodo (primer día)', last),
         el('label', { class: 'fld' }, 'Duración del ciclo', len),
-        el('label', { class: 'fld' }, 'Días de sangrado', period)
+        el('label', { class: 'fld' }, 'Duración habitual (días)', period)
       ));
       card.appendChild(el('div', { class: 'row', style: { marginTop: '8px' } },
         el('button', {

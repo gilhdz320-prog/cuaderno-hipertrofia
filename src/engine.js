@@ -1093,7 +1093,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
       day: day, phase: phase, cycleLength: len, periodLength: period,
       nextStart: nextStart, daysToNext: Math.max(0, daysBetween(dateISO, nextStart)),
       average: avg,
-      bleeding: !!(active && !active.end && daysBetween(active.start, dateISO) >= 0 && daysBetween(active.start, dateISO) < len)
+      bleeding: !!(active && !active.end && daysBetween(active.start, dateISO) >= 0 && daysBetween(active.start, dateISO) < period)
     };
   }
 
@@ -1111,7 +1111,13 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
       if (check.strength >= 2) { loadFactor = Math.min(loadFactor, 0.92); setDelta -= 1; rirDelta += 0.5; reasons.push('fuerza muy baja'); }
       else if (check.strength === 1) { loadFactor = Math.min(loadFactor, 0.95); reasons.push('fuerza algo baja'); }
     }
-    if (check.pain) { setDelta -= 1; reasons.push('dolor o malestar'); }
+    const pain = typeof check.pain === 'number' ? check.pain : (check.pain ? 3 : 0);
+    if (pain >= 4) { setDelta -= 2; loadFactor = Math.min(loadFactor, 0.95); reasons.push('dolor ' + pain + '/5'); }
+    else if (pain >= 2) { setDelta -= 1; reasons.push('dolor ' + pain + '/5'); }
+    if (typeof check.fatigue === 'number') {
+      if (check.fatigue >= 4) { setDelta -= 1; loadFactor = Math.min(loadFactor, 0.95); reasons.push('fatiga ' + check.fatigue + '/5'); }
+      else if (check.fatigue === 3) { reasons.push('fatiga moderada'); }
+    }
     if (check.sleep === false) { setDelta -= 1; reasons.push('mal descanso'); }
     if (readiness && typeof readiness.score === 'number') {
       if (readiness.score < 40) { loadFactor = Math.min(loadFactor, 0.9); setDelta = Math.min(setDelta, -1); reasons.push('preparación roja'); }
