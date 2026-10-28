@@ -287,6 +287,15 @@ const rp = JSON.parse(rot);
 check('full body rota tirón vertical → horizontal', rp.a.indexOf('pull_v') >= 0 && rp.b.indexOf('pull_h') >= 0, rot);
 await ev("[...document.querySelectorAll('.seg button')].find(function(b){return b.textContent==='Automático'}).click()");
 await sleep(600);
+const bicBefore = Number(await ev("(function(){var S=Cuaderno.state();var ex=Cuaderno.engine.getExMap(S.custom);return Cuaderno.engine.volumeOf(S.program,ex).biceps.total})()"));
+await ev("[...document.querySelectorAll('.pill')].find(function(b){return b.textContent==='Bíceps'}).click()");
+await sleep(700);
+const pri = await ev("(function(){var S=Cuaderno.state();var ex=Cuaderno.engine.getExMap(S.custom);var v=Cuaderno.engine.volumeOf(S.program,ex);return JSON.stringify({pr:S.block.priority,bic:v.biceps.total,sets:Cuaderno.engine.countSets(S.program)})})()");
+check('la prioridad sube el volumen del músculo elegido', JSON.parse(pri).bic > bicBefore, bicBefore + ' → ' + pri);
+await ev("[...document.querySelectorAll('.pill')].find(function(b){return b.textContent==='Bíceps'}).click()");
+await sleep(600);
+check('se puede quitar la prioridad', (await ev("(Cuaderno.state().block.priority||[]).length")) === 0);
+
 check('vuelve al reparto automático', (await ev("Cuaderno.state().block.split")) === 'auto');
 
 check('sin excepciones de JavaScript', exceptions.length === 0, exceptions.join(' | '));

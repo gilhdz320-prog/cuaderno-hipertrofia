@@ -65,6 +65,20 @@
     return Math.round((AIM[id] || 0) * volumeFactor(experience) * 10) / 10;
   }
 
+  /* Músculos que se pueden priorizar y los que ceden series cuando hay
+     prioridad: primero pantorrilla, glúteo medio y femoral. */
+  const PRIORITY_MUSCLES = ['glute', 'delt_side', 'delt_rear', 'biceps', 'triceps', 'back', 'chest', 'quad', 'ham', 'calf'];
+  const GIVES_WAY = ['calf', 'glute_med', 'ham', 'quad', 'chest', 'back'];
+
+  function aimWithPriority(id, experience, priority) {
+    const base = aimOf(id, experience);
+    const list = priority || [];
+    if (!list.length) return base;
+    if (list.indexOf(id) >= 0) return Math.round(base * 1.3 * 10) / 10;
+    if (GIVES_WAY.indexOf(id) >= 0) return Math.round(base * 0.85 * 10) / 10;
+    return base;
+  }
+
   /* ------------------------------------------------------------------ *
    * 2. Biblioteca de ejercicios
    *    bwFactor = carga de calibración como fracción del peso corporal.
@@ -550,21 +564,41 @@
   }
 
   /* Full body: cada sesión rota el patrón de tirón, el de pierna y el de press. */
-  function fullBodyTemplate(n) {
+  function needsArmSlots(priority) {
+    const pr = priority || [];
+    return pr.indexOf('biceps') >= 0 || pr.indexOf('triceps') >= 0;
+  }
+
+  function needsShoulderSlots(priority) {
+    const pr = priority || [];
+    return pr.indexOf('delt_side') >= 0 || pr.indexOf('delt_rear') >= 0;
+  }
+
+  function fullBodyTemplate(n, priority) {
+    const arms = needsArmSlots(priority);
     const A = sess('fb_a', 'fb_a', 1, 'Full body A', 'Cadera, tirón vertical y press plano', [
       slot('hip_thrust', 3, [8, 10], 2), slot('lat_pulldown', 3, [8, 10], 1.5),
       slot('bench', 3, [6, 8], 2), slot('leg_curl_seated', 2, [10, 12], 1),
-      slot('lateral_raise', 2, [12, 15], 1), slot('calf_standing', 2, [10, 12], 1)
+      slot('lateral_raise', 2, [12, 15], 1),
+      arms ? slot('biceps_curl', 2, [10, 12], 1, { superset: 'arms_a' }) : null,
+      arms ? slot('triceps_pushdown', 2, [10, 12], 1, { superset: 'arms_a' }) : null,
+      slot('calf_standing', 2, [10, 12], 1)
     ]);
     const B = sess('fb_b', 'fb_b', 3, 'Full body B', 'Bisagra, tirón horizontal y press vertical', [
       slot('rdl', 3, [8, 10], 2), slot('row_barbell', 3, [8, 10], 1.5),
       slot('ohp', 3, [8, 10], 2), slot('bulgarian', 3, [8, 10], 2),
-      slot('lateral_raise', 2, [12, 15], 1), slot('biceps_curl', 2, [10, 12], 1)
+      slot('lateral_raise', 3, [12, 15], 1),
+      arms ? slot('biceps_curl', 2, [10, 12], 1, { superset: 'arms_b' }) : null,
+      arms ? slot('triceps_pushdown', 2, [10, 12], 1, { superset: 'arms_b' }) : null
     ]);
     const C = sess('fb_c', 'fb_c', 5, 'Full body C', 'Sentadilla, tirón unilateral y press inclinado', [
       slot('hack', 3, [10, 12], 1.5), slot('row_cable_uni', 3, [10, 12], 1),
       slot('incline_db', 3, [8, 10], 2), slot('kickback', 2, [15, 20], 1),
-      slot('face_pull', 2, [15, 20], 1), slot('calf_seated', 2, [12, 15], 1)
+      slot('face_pull', 2, [15, 20], 1),
+      (arms || needsShoulderSlots(priority)) ? slot('lateral_cable', 2, [12, 15], 1) : null,
+      arms ? slot('biceps_curl', 2, [10, 12], 1, { superset: 'arms_c' }) : null,
+      arms ? slot('triceps_pushdown', 2, [10, 12], 1, { superset: 'arms_c' }) : null,
+      slot('calf_seated', 2, [12, 15], 1)
     ]);
     const D = sess('fb_d', 'fb_d', 6, 'Full body D', 'Sumo, remo horizontal y press plano', [
       slot('sumo', 3, [6, 8], 2), slot('row_machine', 3, [8, 10], 1.5),
@@ -659,13 +693,16 @@
       'Cadena posterior un día y anterior otro, alternando variantes. Muy eficiente con pocos días.');
   }
 
-  function splitTemplate(split, n, exMap) {
+  function splitTemplate(split, n, exMap, priority) {
     const s = (split || 'auto');
-    if (s === 'full_body') return fullBodyTemplate(n);
-    if (s === 'ppl') return pplTemplate(n);
-    if (s === 'anterior_posterior') return anteriorPosteriorTemplate(n);
-    if (s === 'upper_lower') return upperLowerTemplate(n);
-    return templateFor(n);
+    let t;
+    if (s === 'full_body') t = fullBodyTemplate(n, priority);
+    else if (s === 'ppl') t = pplTemplate(n);
+    else if (s === 'anterior_posterior') t = anteriorPosteriorTemplate(n);
+    else if (s === 'upper_lower') t = upperLowerTemplate(n);
+    else t = templateFor(n);
+    t.days.forEach(function (d) { d.slots = d.slots.filter(Boolean); });
+    return t;
   }
 
   function templateFor(n) {
@@ -811,13 +848,16 @@
   const CAP = { 2: 23, 3: 21, 4: 18, 5: 17, 6: 16 };
   // 67 activas + 2 opcionales = 69, como el documento.
   const TOTAL_TARGET = { 2: 46, 3: 56, 4: 67, 5: 72, 6: 76 };
-  function capFor(n) { return CAP[n] || 18; }
+  function capFor(n, bump) { return (CAP[n] || 18) + (bump || 0); }
   function totalTargetFor(n) { return TOTAL_TARGET[n] || 69; }
 
   /* Reparte/recorta series hasta acercarse al objetivo semanal, respetando
      el techo por sesión y protegiendo los músculos prioritarios. */
   function fitToTarget(program, exMap, opts) {
-    const target = Math.round(totalTargetFor(program.n) * volumeFactor((opts || {}).experience));
+    const o = opts || {};
+    const extra = (o.priority || []).length * 2;
+    const bump = (o.priority || []).length ? 2 : 0;
+    const target = Math.round(totalTargetFor(program.n) * volumeFactor(o.experience)) + extra;
     const moves = [];
     let guard = 0;
     while (countSets(program) > target && guard++ < 200) {
@@ -833,8 +873,8 @@
     guard = 0;
     while (countSets(program) < target && guard++ < 200) {
       const day = program.days.slice().sort((a, b) => countSets({ days: [a] }) - countSets({ days: [b] }))[0];
-      if (countSets({ days: [day] }) >= capFor(program.n)) {
-        const other = program.days.find(d => countSets({ days: [d] }) < capFor(program.n));
+      if (countSets({ days: [day] }) >= capFor(program.n, bump)) {
+        const other = program.days.find(d => countSets({ days: [d] }) < capFor(program.n, bump));
         if (!other) break;
         addSet(other, exMap, moves);
       } else addSet(day, exMap, moves);
@@ -868,18 +908,25 @@
       const deficits = [], surpluses = [];
       MUSCLES.forEach(m => {
         const total = vol[m.id] ? vol[m.id].total : 0;
-        const aim = aimOf(m.id, exp);
+        const pr = opts.priority || [];
+        const isPriority = pr.indexOf(m.id) >= 0;
+        const givesWay = pr.length > 0 && !isPriority && GIVES_WAY.indexOf(m.id) >= 0;
+        const aim = aimWithPriority(m.id, exp, pr);
         const [lo, hi] = rangeOf(m.id, exp);
-        if (aim && total < Math.min(aim, lo) * 0.95) deficits.push({ id: m.id, gap: Math.min(aim, lo) - total });
-        if (total > hi + 0.5) surpluses.push({ id: m.id, over: total - hi });
+        /* el prioritario persigue su objetivo alto; el resto, el mínimo */
+        const goal = isPriority ? Math.max(aim, lo) : Math.min(aim, lo);
+        if (goal && total < goal * 0.95) deficits.push({ id: m.id, gap: goal - total });
+        const hiEff = givesWay ? Math.max(lo, hi - 1.5) : hi;
+        if (total > hiEff + 0.5) surpluses.push({ id: m.id, over: total - hiEff });
       });
       deficits.sort((a, b) => b.gap - a.gap);
       surpluses.sort((a, b) => b.over - a.over);
       let changed = false;
 
-      if (deficits.length && countSets(program) < totalTargetFor(program.n) + 2) {
+      const capTotal = Math.round(totalTargetFor(program.n) * volumeFactor(exp)) + (opts.priority || []).length * 2 + 2;
+      if (deficits.length && countSets(program) < capTotal) {
         const d = deficits[0];
-        const cand = findSlotForMuscle(program, d.id, exMap);
+        const cand = findSlotForMuscle(program, d.id, exMap, { bump: (opts.priority || []).length ? 2 : 0 });
         if (cand) {
           cand.slot.sets += 1; changed = true;
           moves.push({ type: 'add', ex: cand.slot.ex, name: exOf(cand.slot.ex, exMap).name, session: cand.day.name, sets: 1, muscle: d.id });
@@ -901,10 +948,11 @@
   }
   function findSlotForMuscle(program, muscleId, exMap, opts) {
     opts = opts || {};
+    const bump = opts.bump || 0;
     const limit = opts.remove ? 2 : 5;
     const candidates = [];
     program.days.forEach(day => {
-      if (countSets({ days: [day] }) >= capFor(program.n) && !opts.remove) return;
+      if (countSets({ days: [day] }) >= capFor(program.n, bump) && !opts.remove) return;
       day.slots.forEach(s => {
         if (s.optional) return;
         const e = exOf(s.ex, exMap);
@@ -923,11 +971,11 @@
     opts = opts || {};
     const n = Math.max(2, Math.min(6, opts.n || 4));
     const exMap = opts.exMap || getExMap(opts.custom);
-    const tpl = splitTemplate(opts.split, n, exMap);
+    const tpl = splitTemplate(opts.split, n, exMap, opts.priority);
     applyOverrides(tpl, opts.overrides);
     applySwaps(tpl, opts.swaps);
     applyConstraints(tpl, { exMap: exMap, equipment: opts.equipment, prefs: opts.prefs });
-    if (opts.fit !== false) { fitToTarget(tpl, exMap, opts); rebalance(tpl, exMap, { experience: opts.experience }); }
+    if (opts.fit !== false) { fitToTarget(tpl, exMap, opts); rebalance(tpl, exMap, { experience: opts.experience, priority: opts.priority }); }
     if (opts.phase && opts.phase.volume && opts.phase.volume !== 1) applyVolume(tpl, opts.phase.volume);
     return tpl;
   }
@@ -1939,6 +1987,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     platesFor: platesFor, platesLabel: platesLabel, warmupRamp: warmupRamp, isBarbellExercise: isBarbellExercise, BAR_KG: BAR_KG,
     loadStep: loadStep, nearestLoadable: nearestLoadable,
     swapOptions: swapOptions, sessionRedundancy: sessionRedundancy, movementFamily: movementFamily,
+    PRIORITY_MUSCLES: PRIORITY_MUSCLES, aimWithPriority: aimWithPriority, MUSCLE_LABEL: MUSCLE_LABEL,
     cycleInfo: cycleInfo, cycleAdjustment: cycleAdjustment, cyclePattern: cyclePattern, CYCLE_PHASE_LABEL: CYCLE_PHASE_LABEL, daysBetween: daysBetween,
     CARDIO_PROTOCOLS: CARDIO_PROTOCOLS, lowerDays: lowerDays, suggestCardioDay: suggestCardioDay, cardioWarnings: cardioWarnings, dayDistance: dayDistance,
     EQUIPMENT: EQUIPMENT, requiredEquipment: requiredEquipment, isAvailable: isAvailable,

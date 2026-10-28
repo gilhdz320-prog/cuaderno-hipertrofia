@@ -370,7 +370,7 @@
   function refreshDerived() {
     if (DB && DB.profiles && DB.profiles[DB.activeId]) S = DB.profiles[DB.activeId];
     EX = CE.getExMap(S.custom);
-    const base = S.program && S.program.days ? S.program : CE.buildProgram({ n: S.block.freq, split: S.block.split, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs, experience: S.athlete.experience });
+    const base = S.program && S.program.days ? S.program : CE.buildProgram({ n: S.block.freq, split: S.block.split, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs, experience: S.athlete.experience, priority: S.block.priority || [] });
     S.program = base;
     const ph = CE.phaseFor(S, currentWeek());
     P = ph.volume === 1 ? base : CE.applyVolume(JSON.parse(JSON.stringify(base)), ph.volume);
@@ -1340,6 +1340,7 @@
     /* frecuencia */
     wrap.appendChild(frequencyCard());
     wrap.appendChild(splitCard());
+    wrap.appendChild(priorityCard());
     return wrap;
   }
 
@@ -1388,9 +1389,47 @@
     return card;
   }
 
+  const PRIORITY_LABEL = {
+    glute: 'Glúteo', ham: 'Femoral', back: 'Espalda', chest: 'Pecho',
+    quad: 'Cuádriceps', calf: 'Pantorrilla', delt_side: 'Hombro lateral',
+    delt_rear: 'Hombro posterior', biceps: 'Bíceps', triceps: 'Tríceps'
+  };
+
+  function priorityCard() {
+    const pr = S.block.priority || [];
+    const card = el('div', { class: 'card' });
+    card.appendChild(el('div', { class: 'card-title' },
+      el('h2', { text: 'Prioridades' }),
+      el('span', { class: 'meta', text: pr.length ? pr.map(function (id) { return PRIORITY_LABEL[id] || id; }).join(' · ') : 'nada marcado' })
+    ));
+    card.appendChild(el('p', { class: 'hint', text: 'Hasta tres músculos. El motor les sube las series y se las quita a pantorrilla, femoral y cuádriceps. Cada prioridad añade unos 5 minutos por semana.' }));
+    const row = el('div', { class: 'row tight', style: { flexWrap: 'wrap', gap: '6px' } });
+    CE.PRIORITY_MUSCLES.forEach(function (id) {
+      const on = pr.indexOf(id) >= 0;
+      row.appendChild(el('button', {
+        class: 'pill', 'aria-pressed': on ? 'true' : 'false',
+        style: on ? { borderColor: 'var(--volt)', color: 'var(--volt)', background: 'transparent', cursor: 'pointer' } : { cursor: 'pointer' },
+        text: PRIORITY_LABEL[id] || id,
+        onclick: () => {
+          const list = (S.block.priority || []).slice();
+          const i = list.indexOf(id);
+          if (i >= 0) list.splice(i, 1);
+          else { if (list.length >= 3) { toast('Máximo tres prioridades'); return; } list.push(id); }
+          S.block.priority = list;
+          S.program = CE.buildProgram({ n: S.block.freq, split: S.block.split, exMap: EX, loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps, experience: S.athlete.experience, priority: list });
+          S.block.freq = S.program.days.length;
+          save(true); render();
+          toast(list.length ? 'Prioridades: ' + list.map(function (x) { return PRIORITY_LABEL[x]; }).join(', ') : 'Sin prioridades');
+        }
+      }));
+    });
+    card.appendChild(row);
+    return card;
+  }
+
   function applySplit(id) {
     S.block.split = id;
-    S.program = CE.buildProgram({ n: S.block.freq, split: id, exMap: EX, loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps, experience: S.athlete.experience });
+    S.program = CE.buildProgram({ n: S.block.freq, split: id, exMap: EX, loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps, experience: S.athlete.experience, priority: S.block.priority || [] });
     S.block.freq = S.program.days.length;
     save(true); render();
     toast(CE.SPLITS[id].label + ': ' + S.program.days.length + ' días');
@@ -1430,7 +1469,7 @@
 
     const n = PENDING_FREQ || S.block.freq;
     if (n !== S.block.freq) {
-      const cand = CE.buildProgram({ n: n, split: S.block.split, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs, experience: S.athlete.experience });
+      const cand = CE.buildProgram({ n: n, split: S.block.split, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs, experience: S.athlete.experience, priority: S.block.priority || [] });
       const diff = CE.diffPrograms(S.program, cand, EX, S.loads);
       card.appendChild(el('hr', { class: 'sep' }));
       card.appendChild(el('h3', { text: 'Pasar a ' + n + ' días: esto es lo que cambia' }));
@@ -1489,7 +1528,7 @@
   }
 
   function applyFrequency(n) {
-    const cand = CE.buildProgram({ n: n, split: S.block.split, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs, experience: S.athlete.experience });
+    const cand = CE.buildProgram({ n: n, split: S.block.split, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs, experience: S.athlete.experience, priority: S.block.priority || [] });
     S.program = cand;
     S.block.freq = n;
     PENDING_FREQ = null;
@@ -2310,7 +2349,7 @@
         DB = CE.migrateState(obj);
         S = DB.profiles[DB.activeId];
         if (!S.program || !S.program.days) {
-          S.program = CE.buildProgram({ n: S.block.freq, exMap: CE.getExMap(S.custom), loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps, experience: S.athlete.experience });
+          S.program = CE.buildProgram({ n: S.block.freq, exMap: CE.getExMap(S.custom), loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps, experience: S.athlete.experience, priority: S.block.priority || [] });
         }
         save(true); refreshDerived(); render(); toast('Copia importada: ' + profileList().length + ' perfil(es)');
       } catch (e) { toast('Ese archivo no es una copia válida'); }
@@ -2637,7 +2676,7 @@
       const sug = CE.suggestCardioDay(CE.buildProgram({ n: ONB.freq, exMap: EX, loads: S.loads, equipment: S.equipment }), EX);
       S.cardio = Object.assign({}, S.cardio, { hiit: ONB.hiit, day: sug.weekday, steps: (S.cardio && S.cardio.steps) || 8000 });
       S.cycle = Object.assign({}, S.cycle, { enabled: ONB.cycle, lastStart: ONB.lastStart || (S.cycle && S.cycle.lastStart) || '' });
-      S.program = CE.buildProgram({ n: ONB.freq, exMap: EX, loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps, experience: S.athlete.experience });
+      S.program = CE.buildProgram({ n: ONB.freq, exMap: EX, loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps, experience: S.athlete.experience, priority: S.block.priority || [] });
     }
     S.onboarded = true;
     save(true);
@@ -2801,7 +2840,7 @@
         else eq = eq.filter((id) => id !== item.id);
         S.equipment = eq;
         /* en sitio: conserva tus series, reps y ejercicios elegidos */
-        const changes = CE.applyConstraints(S.program, { exMap: EX, equipment: S.equipment, prefs: S.prefs, experience: S.athlete.experience });
+        const changes = CE.applyConstraints(S.program, { exMap: EX, equipment: S.equipment, prefs: S.prefs, experience: S.athlete.experience, priority: S.block.priority || [] });
         save(true); render();
         const replaced = changes.filter((c) => c.to).length;
         toast(replaced ? 'Cambiados ' + replaced + ' ejercicios por falta de material' : 'Material actualizado');
@@ -2813,7 +2852,7 @@
       el('button', {
         class: 'btn sm ghost', text: 'Reconstruir desde la plantilla',
         onclick: () => {
-          S.program = CE.buildProgram({ n: S.block.freq, split: S.block.split, exMap: EX, loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps, experience: S.athlete.experience });
+          S.program = CE.buildProgram({ n: S.block.freq, split: S.block.split, exMap: EX, loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps, experience: S.athlete.experience, priority: S.block.priority || [] });
           save(true); render();
           toast('Programa reconstruido con tu material y tus gustos');
         }
@@ -2976,7 +3015,7 @@
     let msg = 'Preferencia guardada';
     if (value === 'dislike') {
       const before = S.program.days.reduce((n, d) => n + d.slots.filter((s) => s.ex === exId).length, 0);
-      const changes = CE.applyConstraints(S.program, { exMap: EX, equipment: S.equipment, prefs: S.prefs, experience: S.athlete.experience });
+      const changes = CE.applyConstraints(S.program, { exMap: EX, equipment: S.equipment, prefs: S.prefs, experience: S.athlete.experience, priority: S.block.priority || [] });
       const replaced = changes.filter((c) => c.to && c.from === exId);
       if (replaced.length) msg = 'Cambiado por «' + replaced[0].toName + '»';
       else if (before) msg = 'No hay sustituto mejor; se queda por ahora';
@@ -3563,7 +3602,7 @@
     DB = readStore();
     S = DB.profiles[DB.activeId];
     if (!S.program || !S.program.days) {
-      S.program = CE.buildProgram({ n: S.block.freq, exMap: CE.getExMap(S.custom), loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs, experience: S.athlete.experience });
+      S.program = CE.buildProgram({ n: S.block.freq, exMap: CE.getExMap(S.custom), loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs, experience: S.athlete.experience, priority: S.block.priority || [] });
     }
     if (!S.loads || !Object.keys(S.loads).length) S.loads = CE.seedLoads(S);
     refreshDerived();
