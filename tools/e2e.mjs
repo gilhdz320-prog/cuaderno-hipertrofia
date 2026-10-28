@@ -59,6 +59,12 @@ if (onbOpen) {
 }
 check('el alta guiada se puede saltar', !(await ev("!document.getElementById('modal').hidden")));
 
+/* si hoy es día de descanso, se abre una sesión desde la tarjeta */
+if ((await ev("document.querySelectorAll('.ex').length")) === 0) {
+  await ev("(function(){var b=[...document.querySelectorAll('#view button')].find(function(x){return /Tren superior A|Tren inferior A|Full body A|Push|Cuerpo completo A/.test(x.textContent)}); if(b) b.click(); return 1})()");
+  await sleep(600);
+}
+
 check('arranca con la sesión de hoy', await ev("!!document.querySelector('#view h1')"), await ev("document.querySelector('#view h1') && document.querySelector('#view h1').textContent"));
 check('hay tarjetas de ejercicio', (await ev("document.querySelectorAll('.ex').length")) > 0, await ev("document.querySelectorAll('.ex').length"));
 const repsPrefill = await ev("document.querySelector('.ex .set-row input[inputmode=numeric]').value");
@@ -158,6 +164,10 @@ check('crea y activa el perfil nuevo', (await ev("document.getElementById('profi
 check('el perfil nuevo empieza sin registros', (await ev("Object.keys(Cuaderno.state().logs).length")) === 0);
 await ev("document.querySelector('[data-tab=hoy]').click()");
 await sleep(500);
+if ((await ev("document.querySelectorAll('.ex').length")) === 0) {
+  await ev("(function(){var b=[...document.querySelectorAll('#view button')].find(function(x){return /Tren |Full body|Push|Pull|Legs|Cuerpo completo|Cadena/.test(x.textContent)}); if(b) b.click(); return 1})()");
+  await sleep(600);
+}
 check('ofrece «todo normal»', (await ev("document.querySelector('#view').textContent.indexOf('Todo normal') >= 0")) === true);
 await ev("[...document.querySelectorAll('button')].find(function(b){return b.textContent==='Todo normal'}).click()");
 await sleep(500);
@@ -265,6 +275,19 @@ check('la guía rápida está en Ajustes', (await ev("document.querySelector('#v
 check('la guía explica lo esencial', (await ev("document.querySelector('#view').textContent.indexOf('Registrar una serie') >= 0")) === true);
 
 
+
+/* ---------- repartos ---------- */
+await ev("document.querySelector('[data-tab=semana]').click()");
+await sleep(600);
+await ev("[...document.querySelectorAll('.seg button')].find(function(b){return b.textContent==='Full body'}).click()");
+await sleep(700);
+check('cambia a full body', (await ev("Cuaderno.state().program.days.map(function(d){return d.name}).join('|')")).indexOf('Full body') >= 0, await ev("Cuaderno.state().program.days.map(function(d){return d.name}).join(' | ')"));
+const rot = await ev("(function(){var S=Cuaderno.state();var ex=Cuaderno.engine.getExMap(S.custom);var pats=S.program.days.map(function(d){return d.slots.map(function(s){return ex[s.ex].pattern})});return JSON.stringify({a:pats[0],b:pats[1]})})()");
+const rp = JSON.parse(rot);
+check('full body rota tirón vertical → horizontal', rp.a.indexOf('pull_v') >= 0 && rp.b.indexOf('pull_h') >= 0, rot);
+await ev("[...document.querySelectorAll('.seg button')].find(function(b){return b.textContent==='Automático'}).click()");
+await sleep(600);
+check('vuelve al reparto automático', (await ev("Cuaderno.state().block.split")) === 'auto');
 
 check('sin excepciones de JavaScript', exceptions.length === 0, exceptions.join(' | '));
 

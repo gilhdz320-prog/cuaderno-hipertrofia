@@ -1252,6 +1252,140 @@ window.CUADERNO_CONFIG = {
 
   function clone(obj) { return JSON.parse(JSON.stringify(obj)); }
 
+  /* ------------------------------------------------------------------ *
+   * 3.b Repartos alternativos
+   * ------------------------------------------------------------------ */
+  const SPLITS = {
+    auto: { id: 'auto', label: 'Automático', hint: 'El que corresponde a tus días' },
+    full_body: { id: 'full_body', label: 'Full body', hint: 'Todo el cuerpo cada sesión, rotando patrones' },
+    upper_lower: { id: 'upper_lower', label: 'Tren superior / inferior', hint: 'Dos de cada, el clásico' },
+    ppl: { id: 'ppl', label: 'Push · Pull · Legs', hint: 'Empuje, tirón y pierna por separado' },
+    anterior_posterior: { id: 'anterior_posterior', label: 'Anterior / posterior', hint: 'Cadena posterior un día, anterior otro' }
+  };
+
+  function sess(id, kind, weekday, name, focus, slots) {
+    return { id: id, kind: kind, weekday: weekday, name: name, focus: focus, slots: slots };
+  }
+
+  /* Full body: cada sesión rota el patrón de tirón, el de pierna y el de press. */
+  function fullBodyTemplate(n) {
+    const A = sess('fb_a', 'fb_a', 1, 'Full body A', 'Cadera, tirón vertical y press plano', [
+      slot('hip_thrust', 3, [8, 10], 2), slot('lat_pulldown', 3, [8, 10], 1.5),
+      slot('bench', 3, [6, 8], 2), slot('leg_curl_seated', 2, [10, 12], 1),
+      slot('lateral_raise', 2, [12, 15], 1), slot('calf_standing', 2, [10, 12], 1)
+    ]);
+    const B = sess('fb_b', 'fb_b', 3, 'Full body B', 'Bisagra, tirón horizontal y press vertical', [
+      slot('rdl', 3, [8, 10], 2), slot('row_barbell', 3, [8, 10], 1.5),
+      slot('ohp', 3, [8, 10], 2), slot('bulgarian', 3, [8, 10], 2),
+      slot('lateral_raise', 2, [12, 15], 1), slot('biceps_curl', 2, [10, 12], 1)
+    ]);
+    const C = sess('fb_c', 'fb_c', 5, 'Full body C', 'Sentadilla, tirón unilateral y press inclinado', [
+      slot('hack', 3, [10, 12], 1.5), slot('row_cable_uni', 3, [10, 12], 1),
+      slot('incline_db', 3, [8, 10], 2), slot('kickback', 2, [15, 20], 1),
+      slot('face_pull', 2, [15, 20], 1), slot('calf_seated', 2, [12, 15], 1)
+    ]);
+    const D = sess('fb_d', 'fb_d', 6, 'Full body D', 'Sumo, remo horizontal y press plano', [
+      slot('sumo', 3, [6, 8], 2), slot('row_machine', 3, [8, 10], 1.5),
+      slot('bench', 2, [6, 8], 2), slot('leg_ext', 3, [12, 15], 1),
+      slot('lateral_cable', 3, [12, 15], 1), slot('triceps_pushdown', 2, [10, 12], 1)
+    ]);
+    const all = [A, B, C, D];
+    if (n > 4) {
+      return cycleDays(all, n, function (k) { return 'Full body · ' + k + ' días'; },
+        'Cada sesión rota el patrón: si una tira vertical, la siguiente rema.');
+    }
+    const days = all.slice(0, Math.max(2, Math.min(4, n)));
+    return { n: days.length, label: 'Full body · ' + days.length + ' días', note: 'Cada sesión rota el patrón: si una tira vertical, la siguiente rema.', days: days };
+  }
+
+  /* repite una lista de días hasta n, renombrando las copias */
+  function cycleDays(list, n, label, note) {
+    const days = [];
+    for (let i = 0; i < n; i++) {
+      const src = list[i % list.length];
+      const d = JSON.parse(JSON.stringify(src));
+      const vuelta = Math.floor(i / list.length);
+      if (vuelta > 0) {
+        d.id = src.id + '_' + (vuelta + 1);
+        d.name = src.name.replace(/ [A-Z]$/, '') + ' ' + String.fromCharCode(65 + vuelta);
+      }
+      d.weekday = [1, 2, 4, 5, 6, 3][i] || (i + 1);
+      days.push(d);
+    }
+    return { n: days.length, label: label(days.length), note: note, days: days };
+  }
+
+  function upperLowerTemplate(n) {
+    const base = templateFor(4);
+    if (n === 4) return base;
+    if (n === 2) return { n: 2, label: 'Superior / inferior · 2 días', note: 'Una sesión de cada.', days: [base.days[0], base.days[1]] };
+    if (n === 3) return { n: 3, label: 'Superior / inferior · 3 días', note: 'Dos de tren inferior y una de superior.', days: [base.days[0], base.days[1], base.days[2]] };
+    return templateFor(n);
+  }
+
+  function pplTemplate(n) {
+    const push = sess('ppl_push', 'ppl_push', 1, 'Push', 'Pecho, hombro y tríceps', [
+      slot('bench', 3, [6, 8], 2), slot('incline_db', 3, [8, 10], 2),
+      slot('ohp', 2, [8, 10], 2), slot('lateral_raise', 4, [12, 15], 1),
+      slot('triceps_pushdown', 3, [10, 12], 1), slot('face_pull', 2, [15, 20], 1)
+    ]);
+    const pull = sess('ppl_pull', 'ppl_pull', 3, 'Pull', 'Espalda, deltoides posterior y bíceps', [
+      slot('lat_pulldown', 3, [8, 10], 1.5), slot('row_barbell', 3, [8, 10], 1.5),
+      slot('row_cable_uni', 2, [10, 12], 1), slot('lateral_cable', 3, [12, 15], 1),
+      slot('biceps_curl', 3, [10, 12], 1), slot('face_pull', 2, [15, 20], 1)
+    ]);
+    const legs = sess('ppl_legs', 'ppl_legs', 5, 'Legs', 'Cuádriceps, glúteo y femoral', [
+      slot('sumo', 3, [6, 8], 2), slot('bulgarian', 4, [8, 10], 2),
+      slot('hack', 3, [10, 12], 1.5), slot('leg_curl_lying', 3, [10, 12], 1),
+      slot('kickback', 2, [15, 20], 1), slot('calf_standing', 2, [10, 12], 1)
+    ]);
+    if (n <= 3) return { n: 3, label: 'Push · Pull · Legs · 3 días', note: 'Empuje, tirón y pierna. Más volumen por músculo y más días.', days: [push, pull, legs] };
+    if (n >= 6) {
+      const days = [push, pull, legs, push, pull, legs].map(function (d, i) {
+        const c = JSON.parse(JSON.stringify(d));
+        c.id = d.id + '_' + (i + 1);
+        c.weekday = i + 1;
+        if (i >= 3) { c.name += ' B'; c.focus = 'Segunda variante'; }
+        return c;
+      });
+      return { n: 6, label: 'Push · Pull · Legs · 6 días', note: 'Dos vueltas a la semana. En déficit solo si el sueño acompaña.', days: days };
+    }
+    const extra = [];
+    for (let i = 0; i < n - 3; i++) {
+      const acc = JSON.parse(JSON.stringify(i === 0 ? ACCESSORY_5 : ACCESSORY_6));
+      acc.id = acc.id + '_ppl' + i;
+      acc.weekday = [6, 7][i] || (i + 6);
+      extra.push(acc);
+    }
+    return { n: 3 + extra.length, label: 'Push · Pull · Legs + accesorios · ' + (3 + extra.length) + ' días', note: 'PPL más una o dos sesiones cortas de prioridad.', days: [push, pull, legs].concat(extra) };
+  }
+
+  function anteriorPosteriorTemplate(n) {
+    const post = sess('ap_post', 'ap_post', 1, 'Cadena posterior', 'Femoral, glúteo, espalda y posterior de hombro', [
+      slot('rdl', 3, [8, 10], 2), slot('row_barbell', 3, [8, 10], 1.5),
+      slot('lat_pulldown', 3, [8, 10], 1.5), slot('hip_thrust', 3, [8, 10], 2),
+      slot('leg_curl_seated', 3, [10, 12], 1), slot('face_pull', 2, [15, 20], 1),
+      slot('calf_seated', 2, [12, 15], 1)
+    ]);
+    const ant = sess('ap_ant', 'ap_ant', 4, 'Cadena anterior', 'Cuádriceps, pecho, hombro y tríceps', [
+      slot('hack', 4, [10, 12], 1.5), slot('bench', 3, [6, 8], 2),
+      slot('bulgarian', 3, [8, 10], 2), slot('ohp', 2, [8, 10], 2),
+      slot('lateral_raise', 3, [12, 15], 1), slot('triceps_pushdown', 3, [10, 12], 1),
+      slot('calf_standing', 2, [10, 12], 1)
+    ]);
+    return cycleDays([post, ant], n === 2 ? 2 : n, function (k) { return 'Anterior / posterior · ' + k + ' días'; },
+      'Cadena posterior un día y anterior otro, alternando variantes. Muy eficiente con pocos días.');
+  }
+
+  function splitTemplate(split, n, exMap) {
+    const s = (split || 'auto');
+    if (s === 'full_body') return fullBodyTemplate(n);
+    if (s === 'ppl') return pplTemplate(n);
+    if (s === 'anterior_posterior') return anteriorPosteriorTemplate(n);
+    if (s === 'upper_lower') return upperLowerTemplate(n);
+    return templateFor(n);
+  }
+
   function templateFor(n) {
     n = Math.max(2, Math.min(6, n | 0));
     if (n === 2) return clone(TEMPLATE_2);
@@ -1500,7 +1634,7 @@ window.CUADERNO_CONFIG = {
     opts = opts || {};
     const n = Math.max(2, Math.min(6, opts.n || 4));
     const exMap = opts.exMap || getExMap(opts.custom);
-    const tpl = templateFor(n);
+    const tpl = splitTemplate(opts.split, n, exMap);
     applyOverrides(tpl, opts.overrides);
     applySwaps(tpl, opts.swaps);
     applyConstraints(tpl, { exMap: exMap, equipment: opts.equipment, prefs: opts.prefs });
@@ -2486,7 +2620,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     volumeOf: volumeOf, countSets: countSets, volumeRows: volumeRows,
     sessionMinutes: sessionMinutes, sessionStats: sessionStats, programStats: programStats,
     fitToTarget: fitToTarget, rebalance: rebalance, diffPrograms: diffPrograms, capFor: capFor, totalTargetFor: totalTargetFor,
-    applySwaps: applySwaps,
+    applySwaps: applySwaps, SPLITS: SPLITS, splitTemplate: splitTemplate,
     phaseForWeek: phaseForWeek, applyVolume: applyVolume,
     parseDate: parseDate, toISODate: toISODate, mondayOf: mondayOf, addDays: addDays, weekNumber: weekNumber, weekdayName: weekdayName,
     advise: advise, lastEntryFor: lastEntryFor, loadHistory: loadHistory, countChanges: countChanges,
@@ -3145,7 +3279,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
   function refreshDerived() {
     if (DB && DB.profiles && DB.profiles[DB.activeId]) S = DB.profiles[DB.activeId];
     EX = CE.getExMap(S.custom);
-    const base = S.program && S.program.days ? S.program : CE.buildProgram({ n: S.block.freq, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs });
+    const base = S.program && S.program.days ? S.program : CE.buildProgram({ n: S.block.freq, split: S.block.split, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs });
     S.program = base;
     const ph = CE.phaseFor(S, currentWeek());
     P = ph.volume === 1 ? base : CE.applyVolume(JSON.parse(JSON.stringify(base)), ph.volume);
@@ -4094,6 +4228,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
 
     /* frecuencia */
     wrap.appendChild(frequencyCard());
+    wrap.appendChild(splitCard());
     return wrap;
   }
 
@@ -4116,6 +4251,38 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
       }
     }));
     return row;
+  }
+
+  function splitCard() {
+    const cur = S.block.split || 'auto';
+    const card = el('div', { class: 'card' });
+    card.appendChild(el('div', { class: 'card-title' },
+      el('h2', { text: 'Reparto de la semana' }),
+      el('span', { class: 'meta', text: CE.SPLITS[cur] ? CE.SPLITS[cur].label : 'Automático' })
+    ));
+    card.appendChild(el('p', { class: 'hint', text: 'Cómo se reparten los músculos. En full body cada sesión rota el patrón: si un día tiras vertical, el siguiente remas.' }));
+    const seg = el('div', { class: 'seg', style: { flexWrap: 'wrap' } });
+    Object.keys(CE.SPLITS).forEach(function (id) {
+      seg.appendChild(el('button', {
+        type: 'button', text: CE.SPLITS[id].label, 'aria-pressed': cur === id ? 'true' : 'false',
+        onclick: () => applySplit(id)
+      }));
+    });
+    card.appendChild(seg);
+    const sp = CE.SPLITS[cur];
+    if (sp) card.appendChild(el('p', { class: 'tiny muted', style: { marginTop: '8px' }, text: sp.hint + '.' }));
+    card.appendChild(el('div', { class: 'row', style: { marginTop: '10px' } },
+      el('span', { class: 'tiny muted', text: 'Ahora: ' + S.program.days.map(function (d) { return d.name; }).join(' · ') })
+    ));
+    return card;
+  }
+
+  function applySplit(id) {
+    S.block.split = id;
+    S.program = CE.buildProgram({ n: S.block.freq, split: id, exMap: EX, loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps });
+    S.block.freq = S.program.days.length;
+    save(true); render();
+    toast(CE.SPLITS[id].label + ': ' + S.program.days.length + ' días');
   }
 
   function statCard(v, k, d) {
@@ -4152,7 +4319,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
 
     const n = PENDING_FREQ || S.block.freq;
     if (n !== S.block.freq) {
-      const cand = CE.buildProgram({ n: n, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs });
+      const cand = CE.buildProgram({ n: n, split: S.block.split, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs });
       const diff = CE.diffPrograms(S.program, cand, EX, S.loads);
       card.appendChild(el('hr', { class: 'sep' }));
       card.appendChild(el('h3', { text: 'Pasar a ' + n + ' días: esto es lo que cambia' }));
@@ -4211,7 +4378,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
   }
 
   function applyFrequency(n) {
-    const cand = CE.buildProgram({ n: n, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs });
+    const cand = CE.buildProgram({ n: n, split: S.block.split, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs });
     S.program = cand;
     S.block.freq = n;
     PENDING_FREQ = null;
@@ -5533,7 +5700,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
       el('button', {
         class: 'btn sm ghost', text: 'Reconstruir desde la plantilla',
         onclick: () => {
-          S.program = CE.buildProgram({ n: S.block.freq, exMap: EX, loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps });
+          S.program = CE.buildProgram({ n: S.block.freq, split: S.block.split, exMap: EX, loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps });
           save(true); render();
           toast('Programa reconstruido con tu material y tus gustos');
         }

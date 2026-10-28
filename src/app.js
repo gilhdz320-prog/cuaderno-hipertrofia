@@ -370,7 +370,7 @@
   function refreshDerived() {
     if (DB && DB.profiles && DB.profiles[DB.activeId]) S = DB.profiles[DB.activeId];
     EX = CE.getExMap(S.custom);
-    const base = S.program && S.program.days ? S.program : CE.buildProgram({ n: S.block.freq, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs });
+    const base = S.program && S.program.days ? S.program : CE.buildProgram({ n: S.block.freq, split: S.block.split, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs });
     S.program = base;
     const ph = CE.phaseFor(S, currentWeek());
     P = ph.volume === 1 ? base : CE.applyVolume(JSON.parse(JSON.stringify(base)), ph.volume);
@@ -1319,6 +1319,7 @@
 
     /* frecuencia */
     wrap.appendChild(frequencyCard());
+    wrap.appendChild(splitCard());
     return wrap;
   }
 
@@ -1341,6 +1342,38 @@
       }
     }));
     return row;
+  }
+
+  function splitCard() {
+    const cur = S.block.split || 'auto';
+    const card = el('div', { class: 'card' });
+    card.appendChild(el('div', { class: 'card-title' },
+      el('h2', { text: 'Reparto de la semana' }),
+      el('span', { class: 'meta', text: CE.SPLITS[cur] ? CE.SPLITS[cur].label : 'Automático' })
+    ));
+    card.appendChild(el('p', { class: 'hint', text: 'Cómo se reparten los músculos. En full body cada sesión rota el patrón: si un día tiras vertical, el siguiente remas.' }));
+    const seg = el('div', { class: 'seg', style: { flexWrap: 'wrap' } });
+    Object.keys(CE.SPLITS).forEach(function (id) {
+      seg.appendChild(el('button', {
+        type: 'button', text: CE.SPLITS[id].label, 'aria-pressed': cur === id ? 'true' : 'false',
+        onclick: () => applySplit(id)
+      }));
+    });
+    card.appendChild(seg);
+    const sp = CE.SPLITS[cur];
+    if (sp) card.appendChild(el('p', { class: 'tiny muted', style: { marginTop: '8px' }, text: sp.hint + '.' }));
+    card.appendChild(el('div', { class: 'row', style: { marginTop: '10px' } },
+      el('span', { class: 'tiny muted', text: 'Ahora: ' + S.program.days.map(function (d) { return d.name; }).join(' · ') })
+    ));
+    return card;
+  }
+
+  function applySplit(id) {
+    S.block.split = id;
+    S.program = CE.buildProgram({ n: S.block.freq, split: id, exMap: EX, loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps });
+    S.block.freq = S.program.days.length;
+    save(true); render();
+    toast(CE.SPLITS[id].label + ': ' + S.program.days.length + ' días');
   }
 
   function statCard(v, k, d) {
@@ -1377,7 +1410,7 @@
 
     const n = PENDING_FREQ || S.block.freq;
     if (n !== S.block.freq) {
-      const cand = CE.buildProgram({ n: n, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs });
+      const cand = CE.buildProgram({ n: n, split: S.block.split, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs });
       const diff = CE.diffPrograms(S.program, cand, EX, S.loads);
       card.appendChild(el('hr', { class: 'sep' }));
       card.appendChild(el('h3', { text: 'Pasar a ' + n + ' días: esto es lo que cambia' }));
@@ -1436,7 +1469,7 @@
   }
 
   function applyFrequency(n) {
-    const cand = CE.buildProgram({ n: n, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs });
+    const cand = CE.buildProgram({ n: n, split: S.block.split, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs });
     S.program = cand;
     S.block.freq = n;
     PENDING_FREQ = null;
@@ -2758,7 +2791,7 @@
       el('button', {
         class: 'btn sm ghost', text: 'Reconstruir desde la plantilla',
         onclick: () => {
-          S.program = CE.buildProgram({ n: S.block.freq, exMap: EX, loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps });
+          S.program = CE.buildProgram({ n: S.block.freq, split: S.block.split, exMap: EX, loads: S.loads, equipment: S.equipment, prefs: S.prefs, swaps: S.swaps });
           save(true); render();
           toast('Programa reconstruido con tu material y tus gustos');
         }
