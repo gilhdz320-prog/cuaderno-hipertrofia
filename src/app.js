@@ -1609,6 +1609,8 @@
       statCard(String(stats.minutes) + '′', 'tiempo semanal', Math.round(stats.minutes / S.program.days.length) + '′ por sesión')
     ));
 
+    wrap.appendChild(volumePanel(CE.volumeOf(S.program, EX)));
+
     S.program.days.forEach((day, di) => {
       const card = el('div', { class: 'card' });
       const red = CE.sessionRedundancy(day, EX);
@@ -1636,6 +1638,34 @@
 
     wrap.appendChild(libraryCard());
     return wrap;
+  }
+
+  function volumePanel(vol) {
+    const rows = CE.volumeRows(vol, S.athlete.experience).filter(function (r) { return r.total > 0; });
+    const card = el('div', { class: 'card tight' });
+    const total = Math.round(rows.reduce(function (a, r) { return a + r.total; }, 0) * 10) / 10;
+    const fuera = rows.filter(function (r) { return r.status !== 'ok'; });
+    card.appendChild(el('div', { class: 'card-title' },
+      el('h2', { text: 'Series por músculo' }),
+      el('span', { class: 'meta', text: total + ' en total · ' + (fuera.length ? fuera.length + ' fuera de rango' : 'todo en rango') })
+    ));
+    const wrap2 = el('div', { class: 'vol-chips' });
+    rows.forEach(function (r) {
+      const low = r.status === 'low', high = r.status === 'high';
+      const falta = low ? Math.round((r.range[0] - r.total) * 10) / 10 : 0;
+      const sobra = high ? Math.round((r.total - r.range[1]) * 10) / 10 : 0;
+      wrap2.appendChild(el('div', {
+        class: 'vol-chip ' + (low ? 'low' : high ? 'high' : 'ok'),
+        title: r.label + ': ' + r.total + ' series (rango ' + r.range[0] + '–' + r.range[1] + ')'
+      },
+        el('span', { class: 'n', text: r.short }),
+        el('b', { text: r.total }),
+        low ? el('i', { text: 'faltan ' + falta }) : high ? el('i', { text: 'sobran ' + sobra }) : el('i', { text: 'ok' })
+      ));
+    });
+    card.appendChild(wrap2);
+    card.appendChild(el('p', { class: 'tiny muted', style: { marginTop: '8px' }, text: 'Se recalcula mientras cambias series. Verde: dentro del rango de tu nivel. Ámbar: te faltan. Rojo: te pasas.' }));
+    return card;
   }
 
   function slotEditor(day, slot, si) {

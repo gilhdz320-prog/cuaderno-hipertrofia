@@ -144,6 +144,13 @@ await sleep(600);
 check('el ejercicio se sustituye', (await ev("document.querySelector('.slot-edit select').value")) !== antesEx, antesEx + ' → ' + await ev("document.querySelector('.slot-edit select').value"));
 check('el programa no nace con patrones duplicados', (await ev("(function(){var S=Cuaderno.state();var ex=Cuaderno.engine.getExMap(S.custom);return S.program.days.every(function(d){return Cuaderno.engine.sessionRedundancy(d,ex).length===0})})()")) === true);
 
+const volAntes = await ev("document.querySelector('.vol-chips') ? document.querySelector('.vol-chips').textContent : ''");
+check('el panel de series aparece en Programa', /Glúteo|Pecho|Espalda/.test(volAntes), volAntes.slice(0, 60));
+await ev("(function(){var b=[...document.querySelectorAll('.stepper button')].find(function(x){return x.textContent==='+'}); b.click(); return 1})()");
+await sleep(500);
+const volDespues = await ev("document.querySelector('.vol-chips') ? document.querySelector('.vol-chips').textContent : ''");
+check('el panel se recalcula al mover series', volDespues !== volAntes);
+
 check('la carga se edita desde Programa', String(await ev("Cuaderno.state().loads[" + JSON.stringify(exId) + "]")) === '99', exId + ' = ' + await ev("Cuaderno.state().loads[" + JSON.stringify(exId) + "]"));
 const setsBefore = await ev("document.querySelector('.slot-edit .stepper .val').textContent");
 await ev("document.querySelector('.slot-edit .stepper button:last-child').click()");

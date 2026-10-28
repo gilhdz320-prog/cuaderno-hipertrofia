@@ -641,3 +641,21 @@ body.train-mode .ex-body { padding: 10px 14px 12px; }
 }
 .plates span { white-space: nowrap; }
 body.train-mode .plates { padding: 6px 14px; font-size: .7rem; }
+
+
+/* panel de series por músculo en el editor */
+.vol-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.vol-chip {
+  display: inline-flex; flex-direction: column; gap: 1px;
+  padding: 6px 9px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--panel-2); min-width: 74px;
+  font-size: .68rem; font-variant-numeric: tabular-nums;
+}
+.vol-chip .n { color: var(--muted); font-size: .6rem; text-transform: uppercase; letter-spacing: .06em; }
+.vol-chip b { font-size: .95rem; line-height: 1; }
+.vol-chip i { font-style: normal; font-size: .58rem; color: var(--muted); }
+.vol-chip.ok { border-color: color-mix(in srgb, var(--green) 35%, var(--line)); }
+.vol-chip.low { border-color: color-mix(in srgb, var(--amber) 55%, var(--line)); }
+.vol-chip.low i { color: var(--amber); }
+.vol-chip.high { border-color: color-mix(in srgb, var(--red) 55%, var(--line)); }
+.vol-chip.high i { color: var(--red); }
