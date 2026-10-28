@@ -146,11 +146,28 @@
     p.program = CE.buildProgram({ n: p.block.freq, exMap: CE.getExMap(p.custom), loads: p.loads, equipment: p.equipment, prefs: p.prefs, swaps: p.swaps });
     DB.profiles[p.id] = p;
     DB.activeId = p.id;
+    rememberProfile(p.id);
     save(true);
     return p;
   }
+  /* Cada dispositivo recuerda SU perfil. Sin esto, la sincronización
+     propaga el perfil activo y os cambia a los dos. */
+  const DEVICE_PROFILE_KEY = 'cuaderno.deviceProfile';
+  function rememberProfile(id) { try { localStorage.setItem(DEVICE_PROFILE_KEY, id); } catch (e) {} }
+  function deviceProfile() { try { return localStorage.getItem(DEVICE_PROFILE_KEY); } catch (e) { return null; } }
+  function applyDeviceProfile() {
+    const id = deviceProfile();
+    if (id && DB.profiles[id] && DB.activeId !== id) {
+      DB.activeId = id;
+      S = DB.profiles[id];
+      return true;
+    }
+    return false;
+  }
+
   function switchProfile(id) {
     if (!DB.profiles[id]) return;
+    rememberProfile(id);
     DB.activeId = id;
     S = DB.profiles[id];
     save(true);
@@ -277,6 +294,8 @@
       const rec = window.CuadernoSync.reconcile(profileList(), rows);
       rec.toLocal.forEach(function (p) { DB.profiles[p.id] = CE.normalizeProfile(p); });
       for (const p of rec.toRemote) await SYNC_CLIENT.push(p);
+      applyDeviceProfile();
+      applyDeviceProfile();
       if (!DB.profiles[DB.activeId]) DB.activeId = Object.keys(DB.profiles)[0];
       S = DB.profiles[DB.activeId];
       SYNC_STATE = 'on'; SYNC_LAST = new Date(); SYNC_ERR = null;
@@ -3126,11 +3145,18 @@
               .map(function (id) { return DB.profiles[id]; })
               .filter(function (p) { return p.id !== DB.activeId && Object.keys(p.logs || {}).length > 0; })
               .sort(function (a, b) { return Object.keys(b.logs || {}).length - Object.keys(a.logs || {}).length; });
-            if (otros.length) {
+            if (otros.length === 1) {
               DB.activeId = otros[0].id;
               S = DB.profiles[DB.activeId];
+              rememberProfile(S.id);
               save(true); refreshDerived(); render();
-              toast('Entrado como ' + (S.name || 'tu perfil') + ' · ' + Object.keys(S.logs).length + ' sesiones recuperadas');
+              toast('Entrado como ' + (S.name || 'tu perfil'));
+              return;
+            }
+            if (otros.length > 1) {
+              save(true); refreshDerived(); render();
+              openProfiles();
+              toast('Elige tu perfil: los dos estáis en la misma cuenta');
               return;
             }
           }
@@ -3690,6 +3716,7 @@
       } catch (e) { /* hash no válido */ }
     }
 
+    applyDeviceProfile();
     save(true);
     snapshotToday();
     const params = new URLSearchParams(location.search);

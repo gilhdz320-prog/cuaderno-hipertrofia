@@ -214,6 +214,9 @@ await ev("document.querySelector('#profileBtn').click()");
 await sleep(300);
 await ev("[...document.querySelectorAll('.sheet button')].find(b=>b.textContent==='usar').click()");
 await sleep(500);
+const perfilRecordado = await ev("localStorage.getItem('cuaderno.deviceProfile')");
+check('el dispositivo recuerda su perfil', !!perfilRecordado, perfilRecordado);
+
 check('vuelve al primer perfil', (await ev("document.getElementById('profileName').textContent")) !== 'Prueba', await ev("document.getElementById('profileName').textContent"));
 check('conserva los registros del primer perfil', (await ev("Object.keys(Cuaderno.state().logs).length")) === logsAntes, logsAntes + ' → ' + await ev("Object.keys(Cuaderno.state().logs).length"));
 const sigueGuardada = await ev("(function(){var L=Cuaderno.state().logs; return Object.keys(L).some(function(d){return Object.keys(L[d].entries||{}).some(function(e){return (L[d].entries[e].sets||[]).some(function(s){return s&&s.done})})})})()");
