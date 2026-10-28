@@ -251,6 +251,10 @@ await sleep(300);
 await ev("document.querySelector('[data-tab=ajustes]').click()");
 await sleep(600);
 check('la tarjeta de copias existe', (await ev("document.querySelector('#view').textContent.indexOf('Copias automáticas') >= 0")) === true);
+check('la guía rápida está en Ajustes', (await ev("document.querySelector('#view').textContent.indexOf('Guía rápida') >= 0")) === true);
+check('la guía explica lo esencial', (await ev("document.querySelector('#view').textContent.indexOf('Registrar una serie') >= 0")) === true);
+
+
 
 check('sin excepciones de JavaScript', exceptions.length === 0, exceptions.join(' | '));
 

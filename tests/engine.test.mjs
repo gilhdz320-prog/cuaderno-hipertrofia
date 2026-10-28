@@ -374,3 +374,28 @@ test('rampa de aproximación', () => {
   assert.equal(CE.isBarbellExercise({ equipment: 'barra' }), true);
   assert.equal(CE.isBarbellExercise({ equipment: 'polea' }), false);
 });
+
+test('señal de descarga con dos rojos o dos semanas bajas', () => {
+  const st = CE.defaultState('2026-11-02');
+  assert.equal(CE.deloadSignal(st, '2026-11-18').need, false, 'sin datos no sugiere nada');
+
+  st.logs['2026-11-16'] = { readiness: { score: 45 } };
+  st.logs['2026-11-17'] = { readiness: { score: 50 } };
+  const dosRojos = CE.deloadSignal(st, '2026-11-18');
+  assert.equal(dosRojos.need, true);
+  assert.match(dosRojos.reason, /rojo/);
+
+  const st2 = CE.defaultState('2026-10-26');
+  st2.logs['2026-11-03'] = { readiness: { score: 60 } };
+  st2.logs['2026-11-10'] = { readiness: { score: 50 } };
+  st2.logs['2026-11-11'] = { readiness: { score: 50 } };
+  assert.equal(CE.deloadSignal(st2, '2026-11-18').reason, '', 'una semana sola no basta si no hay dos rojos');
+});
+
+test('una semana marcada como descarga extra cambia la fase', () => {
+  const st = { block: { deloadWeeks: [4] } };
+  const f = CE.phaseFor(st, 4);
+  assert.equal(f.id, 'extra');
+  assert.equal(f.volume, 0.5);
+  assert.equal(CE.phaseFor(st, 5).id, 'acc', 'la siguiente vuelve a su fase normal');
+});

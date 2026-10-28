@@ -372,12 +372,12 @@
     EX = CE.getExMap(S.custom);
     const base = S.program && S.program.days ? S.program : CE.buildProgram({ n: S.block.freq, exMap: EX, loads: S.loads, swaps: S.swaps, equipment: S.equipment, prefs: S.prefs });
     S.program = base;
-    const ph = CE.phaseForWeek(currentWeek());
+    const ph = CE.phaseFor(S, currentWeek());
     P = ph.volume === 1 ? base : CE.applyVolume(JSON.parse(JSON.stringify(base)), ph.volume);
   }
 
   function currentWeek() { return CE.weekNumber(S.block.start, todayISO()); }
-  function phaseNow() { return CE.phaseForWeek(currentWeek()); }
+  function phaseNow() { return CE.phaseFor(S, currentWeek()); }
   function blockWeek(dateISO) { return CE.weekNumber(S.block.start, dateISO || todayISO()); }
 
   function logFor(dateISO, sessionId) {
@@ -1174,6 +1174,22 @@
       el('button', { class: 'btn sm', text: '→', 'aria-label': 'semana siguiente', onclick: () => { WEEK_OFFSET++; render(); } })
     ));
     wrap.appendChild(head);
+
+    const dsig = CE.deloadSignal(S, todayISO());
+    if (dsig.need && !CE.isExtraDeload(S, currentWeek())) {
+      wrap.appendChild(el('div', { class: 'banner warn' },
+        el('b', { text: 'Señal de descarga: ' }),
+        el('span', { text: dsig.reason + '. El documento dice que esa es la semana para bajar volumen, no para añadir series.' }),
+        el('button', {
+          class: 'btn sm', text: 'añadir descarga a esta semana',
+          onclick: () => {
+            S.block.deloadWeeks = (S.block.deloadWeeks || []).concat([currentWeek()]);
+            save(true); refreshDerived(); render();
+            toast('Semana ' + currentWeek() + ' marcada como descarga');
+          }
+        })
+      ));
+    }
 
     /* semana: días */
     const days = el('div', {});
@@ -2113,6 +2129,8 @@
     doc.appendChild(el('h2', { text: 'Qué se dejó fuera y por qué' }));
     doc.appendChild(el('p', { text: 'La sentadilla con barra libre y el 3×5 desaparecen como eje: su costo axial y su demanda de recuperación no encajan en un déficit con prioridad de glúteo, y el cuádriceps se cubre con hack, prensa y búlgara. La serie tope con back-offs al −8 % también sale: era una herramienta para expresar fuerza máxima, no para acumular estímulo hipertrófico. El test de e1RM queda como opcional para poner una carga inicial sensata, no como objetivo del bloque.' }));
 
+    doc.appendChild(guideSection());
+
     doc.appendChild(el('h2', { text: 'Cómo se vuelve a fuerza' }));
     doc.appendChild(el('p', { text: 'Cuando salga del déficit y las calorías suban, el camino de vuelta es corto: se reintroduce la sentadilla con barra como patrón principal, se sube el RIR objetivo de los básicos a 2 con un día de series más pesadas, se recupera la progresión por carga y se vuelve a medir e1RM. El bloque de hipertrofia no se pierde: el trabajo de glúteo, femoral y pantorrilla es exactamente el que sostiene un peso muerto grande.' }));
     doc.appendChild(el('blockquote', { text: 'Semana actual: ' + (currentWeek() >= 1 ? currentWeek() : '—') + ' · ' + ph.name + '. ' + ph.note }));
@@ -2137,6 +2155,34 @@
   }
 
   function docTable(tbl) { return el('div', { class: 'scroll-x' }, tbl); }
+
+  const GUIA = [
+    ['Antes de entrenar', 'Abre «Hoy». Si todo va normal, pulsa **Todo normal** y listo; si el día es raro, abre el cuestionario y la sesión se ajusta sola (menos carga y/o una serie menos).'],
+    ['Empezar la sesión', 'Botón **Modo entrenamiento**: deja solo ejercicio, objetivo, números y ✓. Se sale con «salir».'],
+    ['Registrar una serie', 'Los kilos, reps y RIR vienen **precargados** de la última vez, en gris. Si repites: pulsa ✓. Si cambias algo: toca el número y luego ✓. El temporizador de descanso arranca solo.'],
+    ['Terminar', 'Pulsa **Terminar sesión**. Verás qué sube y qué no; si cumples el rango con el RIR objetivo, la carga sube ese mismo día.'],
+    ['Cambiar un ejercicio', 'Botón **⇄** en la fila: te da hasta 8 alternativas con tu material. También sirve para quitarlo.'],
+    ['Si no sincroniza', 'El chip de la cabecera cambia a **☁︎ sin conexión**. Ve a *Ajustes → Cuenta → Sincronizar ahora*. Sin red, la app sigue guardando en el dispositivo.'],
+    ['Copias', '*Ajustes → Datos*: hay una **copia automática al día** (últimas 14) y un botón de copia manual antes de tocar algo.'],
+    ['Qué significan las siglas', '**RIR**: repeticiones que te quedaban en la recámara (RIR 2 = podrías haber hecho 2 más). **Series efectivas**: directas cuentan 1, indirectas 0,5. **e1RM**: fuerza estimada a partir de kilos y reps.'],
+    ['Si algo duele', 'Para el ejercicio, cámbialo por una alternativa (⇄) y, si persiste, quítalo del bloque. El dolor no es fatiga.']
+  ];
+
+  function guideSection() {
+    const frag = document.createDocumentFragment();
+    frag.appendChild(el('h2', { text: 'Guía rápida' }));
+    GUIA.forEach(function (item) {
+      const p = el('p', {});
+      p.appendChild(el('b', { text: item[0] + '. ' }));
+      const parts = String(item[1]).split('**');
+      parts.forEach(function (part, i) {
+        if (!part) return;
+        p.appendChild(i % 2 === 1 ? el('b', { text: part }) : document.createTextNode(part));
+      });
+      frag.appendChild(p);
+    });
+    return frag;
+  }
 
   function numToWord(n) {
     return ({ 2: 'dos', 3: 'tres', 4: 'cuatro', 5: 'cinco', 6: 'seis' })[n] || String(n);
@@ -2511,6 +2557,16 @@
     wrap.appendChild(cycleCardSettings());
     wrap.appendChild(cardioCard());
     wrap.appendChild(prefsCard());
+    const gcard = el('div', { class: 'card' });
+    gcard.appendChild(el('div', { class: 'card-title' }, el('h2', { text: 'Guía rápida' }), el('span', { class: 'meta', text: 'lo esencial, en una página' })));
+    const d = el('details', {});
+    d.appendChild(el('summary', { style: { cursor: 'pointer', fontSize: '.85rem', fontWeight: '600' }, text: 'Cómo se usa (para los dos)' }));
+    const inner = el('div', { style: { marginTop: '8px' } });
+    const gs = guideSection();
+    while (gs.firstChild) inner.appendChild(gs.firstChild);
+    d.appendChild(inner);
+    gcard.appendChild(d);
+    wrap.appendChild(gcard);
     wrap.appendChild(accountCard());
     wrap.appendChild(aiCard());
     wrap.appendChild(dataCard());

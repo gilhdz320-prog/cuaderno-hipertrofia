@@ -1256,6 +1256,49 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
   }
 
   /* ------------------------------------------------------------------ *
+   * 8.f Señal de descarga
+   *     Regla del documento: dos semanas con preparación media por debajo
+   *     de 55, o dos semáforos rojos en la misma semana.
+   * ------------------------------------------------------------------ */
+  function deloadSignal(state, dateISO) {
+    const ws = mondayOf(dateISO);
+    const weeks = [];
+    for (let i = 0; i < 3; i++) {
+      const start = addDays(ws, -7 * i);
+      let sum = 0, n = 0, red = 0;
+      for (let d = 0; d < 7; d++) {
+        const L = state.logs[toISODate(addDays(start, d))];
+        if (L && L.readiness && typeof L.readiness.score === 'number') {
+          sum += L.readiness.score; n += 1;
+          if (L.readiness.score < 55) red += 1;
+        }
+      }
+      weeks.push({ start: toISODate(start), avg: n ? Math.round(sum / n) : null, n: n, red: red });
+    }
+    const cur = weeks[0], prev = weeks[1];
+    const lowTwo = cur.avg != null && prev.avg != null && cur.avg < 55 && prev.avg < 55;
+    const twoRed = cur.red >= 2;
+    return {
+      need: lowTwo || twoRed,
+      reason: twoRed ? 'dos sesiones en rojo esta semana' : lowTwo ? 'dos semanas con preparación media por debajo de 55' : '',
+      avg: cur.avg, prevAvg: prev.avg, weeks: weeks
+    };
+  }
+
+  function isExtraDeload(state, week) {
+    return !!(state && state.block && (state.block.deloadWeeks || []).indexOf(week) >= 0);
+  }
+
+  /* fase efectiva: la del calendario, salvo que esa semana se haya marcado
+     como descarga extra */
+  function phaseFor(state, week) {
+    if (isExtraDeload(state, week)) {
+      return { id: 'extra', name: 'Descarga añadida', rir: 3.5, volume: 0.5, note: 'Descarga extra: volumen a la mitad y carga mantenida.' };
+    }
+    return phaseForWeek(week);
+  }
+
+  /* ------------------------------------------------------------------ *
    * 8.e Resumen semanal
    * ------------------------------------------------------------------ */
   function bestE1rm(logs, exId, dates) {
@@ -1693,6 +1736,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     REPS_BAND: REPS_BAND, repsBandFor: repsBandFor, clampRepsFor: clampRepsFor, EXPERIENCE_FACTOR: EXPERIENCE_FACTOR,
     e1rm: e1rm, exerciseHistory: exerciseHistory, stagnation: stagnation, projectBlock: projectBlock,
     weekReport: weekReport, reportText: reportText, bestE1rm: bestE1rm,
+    deloadSignal: deloadSignal, phaseFor: phaseFor, isExtraDeload: isExtraDeload,
     platesFor: platesFor, platesLabel: platesLabel, warmupRamp: warmupRamp, isBarbellExercise: isBarbellExercise, BAR_KG: BAR_KG,
     loadStep: loadStep, nearestLoadable: nearestLoadable,
     swapOptions: swapOptions, sessionRedundancy: sessionRedundancy, movementFamily: movementFamily,
