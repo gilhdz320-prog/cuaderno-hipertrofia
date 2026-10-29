@@ -1218,6 +1218,97 @@
    *     hacer cardio en sí. Reglas: día sin fuerza, ≥48 h del tren inferior
    *     y máximo 2 sesiones intensas por semana en déficit.
    * ------------------------------------------------------------------ */
+  /* ------------------------------------------------------------------ *
+   * 7.b Cardio con zonas e intensidades (evidencia)
+   *     Zonas por % de FC máxima (Tanaka 2001: 208 − 0,7 × edad), RPE y
+   *     prueba del habla. Progresión de HIIT por semanas del bloque.
+   * ------------------------------------------------------------------ */
+  const CARDIO_ZONES = [
+    { id: 'z1', name: 'Z1 · recuperación', pct: [50, 60], rpe: '2–3', talk: 'conversación fácil', use: 'calentamiento y vuelta a la calma' },
+    { id: 'z2', name: 'Z2 · base aeróbica', pct: [60, 70], rpe: '3–4', talk: 'puedes hablar en frases completas', use: 'mitocondrias, grasa, recuperación; caminar, bici o elíptica' },
+    { id: 'z3', name: 'Z3 · tempo', pct: [70, 80], rpe: '5–6', talk: 'frases cortas', use: 'económico si tienes poco tiempo; bici o cuestas, no correr tras pierna' },
+    { id: 'z4', name: 'Z4 · umbral', pct: [80, 90], rpe: '7–8', talk: 'palabras sueltas', use: 'intervalos largos (4 × 4)' },
+    { id: 'z5', name: 'Z5 · máximo', pct: [90, 100], rpe: '9–10', talk: 'no puedes hablar', use: 'sprints cortos; poca dosis' }
+  ];
+
+  const HIIT_PROTOCOLS = {
+    hiit_6x1: {
+      id: 'hiit_6x1', name: 'HIIT intro · 6 × 1 min', level: 'principiante',
+      warm: '8 min en Z2', work: 60, rest: 120, reps: 6, zone: 'z4',
+      total: 24, cost: 'medio',
+      detail: '1 min al 85–90 % de tu FC máx (RPE 8: te quedan 2 repeticiones de aire) y 2 min en Z1. Si el minuto no llega completo, acórtalo: manda la calidad.'
+    },
+    hiit_8x1: {
+      id: 'hiit_8x1', name: 'HIIT · 8 × 1 min', level: 'intermedio',
+      warm: '8 min en Z2', work: 60, rest: 90, reps: 8, zone: 'z4',
+      total: 28, cost: 'alto',
+      detail: '1 min al 85–90 % de FC máx (RPE 8) y 1 min 30 s en Z1. Es el 10 × 1 clásico (Little y Gibala) recortado para que sea sostenible.'
+    },
+    hiit_10x1: {
+      id: 'hiit_10x1', name: 'HIIT · 10 × 1 min', level: 'avanzado',
+      warm: '10 min en Z2', work: 60, rest: 60, reps: 10, zone: 'z4',
+      total: 30, cost: 'alto',
+      detail: '1 min al 88–92 % de FC máx (RPE 9) y 1 min en Z1. Protocolo original de Gibala: potente y exigente, una vez por semana.'
+    },
+    hiit_4x4: {
+      id: 'hiit_4x4', name: 'HIIT largo · 4 × 4 min', level: 'intermedio',
+      warm: '10 min en Z2', work: 240, rest: 180, reps: 4, zone: 'z4',
+      total: 38, cost: 'alto',
+      detail: '4 min al 90–95 % de FC máx (RPE 8–9) y 3 min en Z1. El protocolo de Helgerud: el que más sube el VO2máx, y el que más respeto pide.'
+    },
+    sit_4x30: {
+      id: 'sit_4x30', name: 'SIT · 4 × 30 s a tope', level: 'avanzado',
+      warm: '10 min en Z2', work: 30, rest: 240, reps: 4, zone: 'z5',
+      total: 26, cost: 'alto',
+      detail: '30 s a máxima velocidad (RPE 10, sin reserva) y 4 min de recuperación completa en Z1. No más de una vez por semana.'
+    },
+    tempo_25: {
+      id: 'tempo_25', name: 'Tempo · 25 min en Z3', level: 'intermedio',
+      warm: '5 min en Z2', work: 1500, rest: 0, reps: 1, zone: 'z3',
+      total: 30, cost: 'medio',
+      detail: '25 min continuos al 75–80 % de FC máx (RPE 5–6, frases cortas). Alternativa cuando no quieres intervalos y no quieres caminar.'
+    }
+  };
+
+  function hrMax(age) { return Math.round(208 - 0.7 * (Number(age) || 30)); }
+
+  function zoneFor(id) { return CARDIO_ZONES.filter(function (z) { return z.id === id; })[0] || CARDIO_ZONES[1]; }
+
+  function intensityText(protocol, age) {
+    const z = zoneFor(protocol.zone);
+    const max = hrMax(age);
+    const lo = Math.round(max * z.pct[0] / 100);
+    const hi = Math.round(max * z.pct[1] / 100);
+    return {
+      zone: z,
+      hr: lo + '–' + hi + ' ppm (FC máx ≈ ' + max + ' ppm)',
+      rpe: z.rpe + '/10',
+      talk: z.talk,
+      line: 'Trabajo: ' + lo + '–' + hi + ' ppm · RPE ' + z.rpe + ' · ' + z.talk
+    };
+  }
+
+  /* Progresión por semana del bloque: empieza corto y sube. La semana de
+     descarga quita el HIIT y deja solo Z2. */
+  function cardioWeekPlan(state, weekNo) {
+    const level = (state.athlete && state.athlete.experience) || 'intermedio';
+    const phase = phaseFor(state, weekNo);
+    const deload = phase.volume <= 0.6;
+    let id;
+    if (deload) id = 'tempo_25';
+    else if (level === 'principiante') id = weekNo <= 2 ? 'hiit_6x1' : weekNo <= 5 ? 'hiit_8x1' : 'hiit_4x4';
+    else if (level === 'avanzado') id = weekNo <= 2 ? 'hiit_8x1' : weekNo <= 5 ? 'hiit_10x1' : 'hiit_4x4';
+    else id = weekNo <= 2 ? 'hiit_6x1' : weekNo <= 5 ? 'hiit_8x1' : 'hiit_10x1';
+    const proto = HIIT_PROTOCOLS[id];
+    return {
+      protocol: proto,
+      intensity: intensityText(proto, state.athlete && state.athlete.age),
+      zone2: { sessions: state.cardio && state.cardio.hiit ? 2 : 2, minutes: level === 'principiante' ? 30 : 45 },
+      note: deload ? 'Semana de descarga: sin intervalos, solo Z2 y tempo suave.' : '',
+      perWeek: 'Un HIIT por semana como máximo dos. El resto, Z2.'
+    };
+  }
+
   const CARDIO_PROTOCOLS = {
     hiit_10x1: { id: 'hiit_10x1', label: 'HIIT 10 × (1 min fuerte / 1 min suave)', minutes: 20, rpe: 'RPE 8–9', cost: 'alto' },
     hiit_4x4: { id: 'hiit_4x4', label: 'HIIT 4 × (4 min fuerte / 3 min suave)', minutes: 28, rpe: 'RPE 8–9', cost: 'alto' },
@@ -2024,7 +2115,7 @@ const LOWER_PATTERNS = ['hip_thrust', 'hinge', 'squat', 'lunge', 'knee_ext', 'kn
     swapOptions: swapOptions, sessionRedundancy: sessionRedundancy, movementFamily: movementFamily,
     PRIORITY_MUSCLES: PRIORITY_MUSCLES, aimWithPriority: aimWithPriority, MUSCLE_LABEL: MUSCLE_LABEL,
     cycleInfo: cycleInfo, cycleAdjustment: cycleAdjustment, cyclePattern: cyclePattern, CYCLE_PHASE_LABEL: CYCLE_PHASE_LABEL, daysBetween: daysBetween,
-    CARDIO_PROTOCOLS: CARDIO_PROTOCOLS, lowerDays: lowerDays, suggestCardioDay: suggestCardioDay, cardioWarnings: cardioWarnings, dayDistance: dayDistance,
+    CARDIO_PROTOCOLS: CARDIO_PROTOCOLS, CARDIO_ZONES: CARDIO_ZONES, HIIT_PROTOCOLS: HIIT_PROTOCOLS, cardioWeekPlan: cardioWeekPlan, intensityText: intensityText, hrMax: hrMax, lowerDays: lowerDays, suggestCardioDay: suggestCardioDay, cardioWarnings: cardioWarnings, dayDistance: dayDistance,
     EQUIPMENT: EQUIPMENT, requiredEquipment: requiredEquipment, isAvailable: isAvailable,
     pickAlternative: pickAlternative, applyConstraints: applyConstraints,
     migrateState: migrateState, normalizeProfile: normalizeProfile, profileId: profileId

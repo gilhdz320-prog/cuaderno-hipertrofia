@@ -422,3 +422,29 @@ test('la fatiga percibida dispara la señal de descarga', () => {
   assert.equal(sig.need, true);
   assert.match(sig.reason, /destrozado/);
 });
+
+test('cardio: zonas, intensidad y progresión por semanas', () => {
+  const st = CE.defaultState('2026-10-26');
+  st.athlete.age = 35;
+  assert.equal(CE.hrMax(35), 184, 'Tanaka: 208 − 0,7 × edad');
+
+  const s1 = CE.cardioWeekPlan(st, 1);
+  assert.match(s1.protocol.name, /6 × 1/, 'empieza corto');
+  assert.match(s1.intensity.line, /ppm/);
+
+  const s3 = CE.cardioWeekPlan(st, 3);
+  assert.match(s3.protocol.name, /8 × 1/, 'progresa');
+
+  const deload = CE.cardioWeekPlan(st, 6);
+  assert.doesNotMatch(deload.protocol.name, /HIIT|SIT/, 'en descarga no hay intervalos');
+  assert.ok(deload.note.length > 0);
+
+  const av = CE.defaultState('2026-10-26');
+  av.athlete.age = 35;
+  av.athlete.experience = 'avanzado';
+  assert.match(CE.cardioWeekPlan(av, 3).protocol.name, /10 × 1/, 'el avanzado progresa antes');
+
+  const proto = CE.HIIT_PROTOCOLS.hiit_4x4;
+  const inf = CE.intensityText(proto, 35);
+  assert.ok(inf.hr.indexOf('ppm') > 0);
+});

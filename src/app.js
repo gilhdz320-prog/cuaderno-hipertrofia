@@ -1369,6 +1369,7 @@
     /* frecuencia */
     wrap.appendChild(frequencyCard());
     wrap.appendChild(splitCard());
+    wrap.appendChild(cardioCard());
     wrap.appendChild(priorityCard());
     return wrap;
   }
@@ -1392,6 +1393,61 @@
       }
     }));
     return row;
+  }
+
+  function cardioCard() {
+    const wk = currentWeek();
+    const plan = CE.cardioWeekPlan(S, wk);
+    const pr = plan.protocol;
+    const inf = plan.intensity;
+    const card = el('div', { class: 'card' });
+    card.appendChild(el('div', { class: 'card-title' },
+      el('h2', { text: 'Cardio de la semana' }),
+      el('span', { class: 'meta', text: 'semana ' + wk + ' · ' + pr.level })
+    ));
+    if (plan.note) card.appendChild(el('div', { class: 'banner warn', text: plan.note }));
+
+    card.appendChild(el('div', { class: 'row between', style: { alignItems: 'flex-start', gap: '10px' } },
+      el('div', {},
+        el('b', { text: pr.name }),
+        el('div', { class: 'tiny muted', text: pr.detail })
+      ),
+      el('span', { class: 'chip', text: pr.total + ' min' })
+    ));
+
+    const grid = el('div', { class: 'grid three', style: { marginTop: '10px' } });
+    grid.appendChild(el('div', { class: 'stat' }, el('span', { class: 'v', style: { fontSize: '1rem' }, text: inf.hr }), el('span', { class: 'k', text: 'pulsaciones' })));
+    grid.appendChild(el('div', { class: 'stat' }, el('span', { class: 'v', style: { fontSize: '1rem' }, text: 'RPE ' + inf.rpe }), el('span', { class: 'k', text: 'esfuerzo' })));
+    grid.appendChild(el('div', { class: 'stat' }, el('span', { class: 'v', style: { fontSize: '.82rem' }, text: inf.talk }), el('span', { class: 'k', text: 'prueba del habla' })));
+    card.appendChild(grid);
+
+    card.appendChild(el('p', { class: 'tiny muted', style: { marginTop: '8px' }, text: 'Y además: ' + plan.zone2.sessions + ' sesiones de Z2 de ' + plan.zone2.minutes + ' min (60–70 % de FC máx, puedes hablar en frases). ' + plan.perWeek }));
+
+    card.appendChild(el('div', { class: 'row', style: { marginTop: '8px' } },
+      el('button', {
+        class: 'btn sm', text: 'marcar HIIT hecho',
+        onclick: () => {
+          S.cardioLog = S.cardioLog || {};
+          S.cardioLog[todayISO()] = { done: true, protocol: pr.id };
+          save(true); render(); toast('HIIT anotado');
+        }
+      }),
+      el('button', { class: 'btn sm ghost', text: 'ver zonas', onclick: openZones })
+    ));
+    return card;
+  }
+
+  function openZones() {
+    const body = el('div', { class: 'stack' });
+    body.appendChild(el('p', { class: 'hint', text: 'Calculadas sobre tu FC máxima estimada (' + CE.hrMax(S.athlete.age) + ' ppm, fórmula de Tanaka). Si tienes la FC máxima medida en una prueba, usa esa.' }));
+    CE.CARDIO_ZONES.forEach(function (z) {
+      const max = CE.hrMax(S.athlete.age);
+      body.appendChild(el('div', { style: { padding: '8px 0', borderBottom: '1px solid var(--line)' } },
+        el('div', { class: 'row between' }, el('b', { text: z.name }), el('span', { class: 'tiny', text: z.pct[0] + '–' + z.pct[1] + ' % · ' + Math.round(max * z.pct[0] / 100) + '–' + Math.round(max * z.pct[1] / 100) + ' ppm' })),
+        el('div', { class: 'tiny muted', text: 'RPE ' + z.rpe + ' · ' + z.talk + ' · ' + z.use })
+      ));
+    });
+    openSheet('Zonas de cardio', 'Por porcentaje de FC máxima', body, [{ label: 'Cerrar', ghost: true, onClick: closeSheet }]);
   }
 
   function splitCard() {
