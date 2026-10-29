@@ -1708,7 +1708,14 @@
     row.appendChild(sel);
 
     const st = el('div', { class: 'stepper' });
-    st.appendChild(el('button', { text: '−', 'aria-label': 'menos series', onclick: () => { slot.sets = Math.max(1, slot.sets - 1); save(); render(); } }));
+    st.appendChild(el('button', {
+      text: '−', 'aria-label': 'menos series',
+      onclick: () => {
+        slot.sets = Math.max(1, slot.sets - 1);
+        save(); render();
+        setTimeout(function () { afterVolumeLoss(ex.primary, day); }, 300);
+      }
+    }));
     st.appendChild(el('span', { class: 'val', text: String(slot.sets) }));
     st.appendChild(el('button', { text: '+', 'aria-label': 'más series', onclick: () => { slot.sets = Math.min(8, slot.sets + 1); save(); render(); } }));
     row.appendChild(st);
@@ -1757,11 +1764,13 @@
       class: 'btn icon ghost', text: '✕', title: 'quitar',
       onclick: () => {
         const quitado = day.slots.splice(si, 1)[0];
+        const mus = CE.exOf(quitado.ex, EX).primary;
         save(); render();
         toast('«' + CE.exOf(quitado.ex, EX).name + '» quitado', {
           label: 'deshacer',
           onClick: () => { day.slots.splice(si, 0, quitado); save(); render(); toast('Restaurado'); }
         });
+        setTimeout(function () { afterVolumeLoss(mus, day); }, 900);
       }
     }));
     row.appendChild(tools);
@@ -1772,6 +1781,54 @@
       ));
     }
     return row;
+  }
+
+  /* Si al quitar series o un ejercicio un músculo se queda corto, ofrece
+     añadir otro para compensar, con las series que faltan ya puestas. */
+  function afterVolumeLoss(muscleId, day) {
+    if (!muscleId) return;
+    const map = { delt_front: 'deltoids', delt_side: 'deltoids', delt_rear: 'deltoids' };
+    const id = map[muscleId] || muscleId;
+    const rows = CE.volumeRows(CE.volumeOf(S.program, EX), S.athlete.experience);
+    const r = rows.filter(function (x) { return x.id === id; })[0];
+    if (!r || r.status !== 'low') return;
+    const falta = Math.round((r.range[0] - r.total) * 10) / 10;
+    if (falta <= 0) return;
+    toast('Faltan ' + falta + ' series de ' + r.label, {
+      label: 'compensar',
+      onClick: () => openCompensate(muscleId, r.label, falta, day)
+    });
+  }
+
+  function openCompensate(muscleId, label, missing, day) {
+    const ids = muscleId === 'deltoids' ? ['delt_front', 'delt_side', 'delt_rear'] : [muscleId];
+    const base = CE.exOf(S.program.days[0].slots[0].ex, EX);
+    const opts = Object.keys(EX)
+      .filter(function (id) { return ids.indexOf(EX[id].primary) >= 0; })
+      .filter(function (id) { return CE.isAvailable(EX[id], S.equipment); })
+      .filter(function (id) { return !day || day.slots.every(function (s) { return s.ex !== id; }); })
+      .slice(0, 10);
+    const body = el('div', { class: 'stack' });
+    body.appendChild(el('p', { class: 'hint', text: 'Faltan ' + missing + ' series de ' + label + '. Elige con qué completarlas; se añaden al final de la sesión.' }));
+    opts.forEach(function (id) {
+      const e = EX[id];
+      const sets = Math.max(2, Math.min(3, Math.round(missing)));
+      body.appendChild(el('div', { class: 'row between', style: { padding: '8px 0', borderBottom: '1px solid var(--line)' } },
+        el('div', {}, el('b', { text: e.name }), el('div', { class: 'tiny muted', text: sets + ' × ' + (CE.repsBandFor(e)[0]) + '–' + (CE.repsBandFor(e)[1]) + ' · RIR ' + (e.rest > 100 ? 2 : 1) })),
+        el('button', {
+          class: 'btn sm', text: 'añadir',
+          onclick: () => {
+            const target = day || S.program.days[S.program.days.length - 1];
+            target.slots.push({ ex: id, sets: sets, reps: CE.repsBandFor(e).slice(), rir: e.rest > 100 ? 2 : 1, rest: e.rest });
+            if (!S.loads[id]) S.loads[id] = CE.seedLoads(S)[id];
+            save(true); closeSheet(); render();
+            toast('Añadido: ' + e.name + ' ' + sets + ' series');
+          }
+        })
+      ));
+    });
+    if (!opts.length) body.appendChild(el('div', { class: 'empty', text: 'No hay más opciones con tu material para ese músculo.' }));
+    openSheet('Compensar ' + label, 'Te faltan ' + missing + ' series', body, [{ label: 'Cerrar', ghost: true, onClick: closeSheet }]);
   }
 
   function openSwap(day, slot, si) {

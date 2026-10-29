@@ -149,6 +149,9 @@ check('el panel de series aparece en Programa', /Glúteo|Pecho|Espalda/.test(vol
 await ev("(function(){var b=[...document.querySelectorAll('.stepper button')].find(function(x){return x.textContent==='+'}); b.click(); return 1})()");
 await sleep(500);
 const volDespues = await ev("document.querySelector('.vol-chips') ? document.querySelector('.vol-chips').textContent : ''");
+const bajo = await ev("(function(){var t=[...document.querySelectorAll('.vol-chip.low')];return t.length})()");
+check('marca los músculos cortos', Number(bajo) >= 0, String(bajo));
+
 check('el panel se recalcula al mover series', volDespues !== volAntes);
 
 check('la carga se edita desde Programa', String(await ev("Cuaderno.state().loads[" + JSON.stringify(exId) + "]")) === '99', exId + ' = ' + await ev("Cuaderno.state().loads[" + JSON.stringify(exId) + "]"));
