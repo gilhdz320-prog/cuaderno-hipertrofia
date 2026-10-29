@@ -661,3 +661,15 @@ body.train-mode .plates { padding: 6px 14px; font-size: .7rem; }
 .vol-chip.high i { color: var(--red); }
 
 .vol-chip b small { font-size: .6rem; color: var(--muted); font-weight: 500; }
+
+
+/* selector de ejercicio del editor: botón, no desplegable nativo */
+.ex-pick {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; min-height: 38px; padding: 8px 12px;
+  border-radius: 10px; border: 1px solid var(--line-2);
+  background: var(--panel-2); color: var(--ink);
+  font: inherit; font-size: .86rem; font-weight: 600; text-align: left; cursor: pointer;
+}
+.ex-pick:hover { border-color: var(--muted); }
+.ex-pick .caret { color: var(--muted); font-size: .7rem; }

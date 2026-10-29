@@ -132,16 +132,16 @@ check('el glúteo sigue alto', await ev("(function(){var t=document.body.textCon
 await ev("document.querySelector('[data-tab=programa]').click()");
 await sleep(500);
 check('editor con filas', await ev("document.querySelectorAll('.slot-edit').length") > 5, await ev("document.querySelectorAll('.slot-edit').length"));
-const exId = await ev("document.querySelector('.slot-edit select').value");
+const exId = await ev("Cuaderno.state().program.days[0].slots[0].ex");
 const cargaOk = await ev("(function(){var row=document.querySelector('.slot-edit'); var ins=row.querySelectorAll('input'); var last=ins[ins.length-1]; last.value='99'; last.dispatchEvent(new Event('change')); return 1})()");
 await sleep(500);
 await ev("(function(){var b=document.querySelector('.slot-edit .btn.icon.ghost'); b.click(); return 1})()");
 await sleep(400);
 check('abre el cambio de ejercicio con varias opciones', (await ev("document.getElementById('sheet').textContent.indexOf('Alternativas que trabajan lo mismo') >= 0")) === true, await ev("document.querySelectorAll('.sheet .btn.sm').length"));
-const antesEx = await ev("document.querySelector('.slot-edit select').value");
+const antesEx = await ev("Cuaderno.state().program.days[0].slots[0].ex");
 await ev("[...document.querySelectorAll('.sheet .btn.sm')].find(function(b){return b.textContent==='usar'}).click()");
 await sleep(600);
-check('el ejercicio se sustituye', (await ev("document.querySelector('.slot-edit select').value")) !== antesEx, antesEx + ' → ' + await ev("document.querySelector('.slot-edit select').value"));
+check('el ejercicio se sustituye', (await ev("Cuaderno.state().program.days[0].slots[0].ex")) !== antesEx, antesEx + ' → ' + await ev("Cuaderno.state().program.days[0].slots[0].ex"));
 check('el programa no nace con patrones duplicados', (await ev("(function(){var S=Cuaderno.state();var ex=Cuaderno.engine.getExMap(S.custom);return S.program.days.every(function(d){return Cuaderno.engine.sessionRedundancy(d,ex).length===0})})()")) === true);
 
 const volAntes = await ev("document.querySelector('.vol-chips') ? document.querySelector('.vol-chips').textContent : ''");

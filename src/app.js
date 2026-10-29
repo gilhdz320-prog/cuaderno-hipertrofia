@@ -1676,35 +1676,12 @@
     const ex = CE.exOf(slot.ex, EX);
     const row = el('div', { class: 'slot-edit' });
 
-    const sel = el('select', {
-      'aria-label': 'ejercicio',
-      onchange: (ev) => {
-        const prev = slot.ex;
-        slot.ex = ev.target.value;
-        if (prev !== slot.ex) {
-          S.swaps = S.swaps || {};
-          const key = day.kind || day.id;
-          S.swaps[key] = S.swaps[key] || {};
-          S.swaps[key][prev] = slot.ex;
-        }
-        save(); render();
-      }
-    });
-    const byPattern = {};
-    Object.keys(EX).forEach(id => {
-      const e = EX[id];
-      const disponible = CE.isAvailable(e, S.equipment) || id === slot.ex;
-      if (!disponible) return; // no ofrecer lo que no puede hacer
-      byPattern[e.pattern] = byPattern[e.pattern] || [];
-      byPattern[e.pattern].push({ id: id, name: e.name });
-    });
-    Object.keys(byPattern).sort().forEach(pat => {
-      const g = el('optgroup', { label: PATTERN_LABEL[pat] || pat });
-      byPattern[pat].sort((a, b) => a.name.localeCompare(b.name, 'es')).forEach(o => {
-        g.appendChild(el('option', { value: o.id, text: o.name, selected: o.id === slot.ex ? true : null }));
-      });
-      sel.appendChild(g);
-    });
+    /* el nombre abre la lista de alternativas del patrón; debajo, un
+       desplegable con el catálogo completo si quiere buscar a mano */
+    const sel = el('button', {
+      class: 'ex-pick', title: 'Toca para elegir otro ejercicio del mismo patrón',
+      onclick: () => openSwap(day, slot, si)
+    }, el('span', { text: CE.exOf(slot.ex, EX).name }), el('span', { class: 'caret', text: '▾' }));
     row.appendChild(sel);
 
     const st = el('div', { class: 'stepper' });
@@ -1837,6 +1814,28 @@
     const body = el('div', { class: 'stack' });
     body.appendChild(el('p', { class: 'hint', text: 'Alternativas que trabajan lo mismo con tu material. Cuanto más arriba, más parecido al original.' }));
     if (!opts.length) body.appendChild(el('div', { class: 'empty', text: 'No hay alternativas disponibles con tu material actual.' }));
+    const pat = CE.exOf(slot.ex, EX).pattern;
+    const mismos = Object.keys(EX).filter(function (id) {
+      return id !== slot.ex && EX[id].pattern === pat
+        && CE.isAvailable(EX[id], S.equipment) && used.indexOf(id) < 0
+        && !opts.some(function (o) { return o.id === id; });
+    });
+    if (mismos.length) {
+      body.appendChild(el('div', { class: 'card-title', style: { marginTop: '10px' } }, el('h3', { text: 'Todos los del mismo patrón' })));
+      mismos.slice(0, 10).forEach(function (id) {
+        body.appendChild(el('div', { class: 'row between', style: { padding: '7px 0', borderBottom: '1px solid var(--line)' } },
+          el('div', {}, el('b', { class: 'tiny', text: EX[id].name }), el('div', { class: 'tiny muted', text: EX[id].equipment })),
+          el('button', {
+            class: 'btn sm ghost', text: 'usar',
+            onclick: () => {
+              slot.ex = id;
+              if (!S.loads[id]) S.loads[id] = CE.seedLoads(S)[id];
+              save(true); closeSheet(); render(); toast('Cambiado por «' + EX[id].name + '»');
+            }
+          })
+        ));
+      });
+    }
     opts.forEach(function (o) {
       body.appendChild(el('div', { class: 'row between', style: { padding: '8px 0', borderBottom: '1px solid var(--line)' } },
         el('div', {}, el('b', { text: o.name }), el('div', { class: 'tiny muted', text: o.why.join(' · ') })),
@@ -2668,6 +2667,16 @@
       class: 'btn wide', style: { marginTop: '10px' }, text: '+ Nuevo perfil',
       onclick: newProfileSheet
     }));
+    body.appendChild(el('div', { class: 'row', style: { marginTop: '8px' } },
+      el('button', {
+        class: 'btn sm ghost', text: 'olvidar perfil de este móvil',
+        onclick: () => {
+          try { localStorage.removeItem('cuaderno.deviceProfile'); } catch (e) {}
+          closeSheet();
+          toast('Este móvil volverá a preguntar de quién es al abrir');
+        }
+      })
+    ));
     openSheet('Perfiles', 'Cada persona guarda sus cargas, su programa y sus registros por separado, en este dispositivo.', body, [{ label: 'Cerrar', ghost: true, onClick: closeSheet }]);
   }
 
